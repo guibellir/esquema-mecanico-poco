@@ -26,8 +26,8 @@ const KIND_LABEL: Record<string, string> = {
   stator: 'Estator / BCP',
   screen: 'Crivo',
   anchor: 'Âncora',
+  packer: 'Packer',
   filter: 'Filtro',
-  plug: 'Tampão',
   joint: 'Junta',
   other: 'Componente',
 };
@@ -60,12 +60,7 @@ function buildSegments(comps: TubingComponent[], tubingSize: string): Segment[] 
   const segs: Segment[] = [];
   for (let i = 0; i < sorted.length; i++) {
     const c = sorted[i];
-    const from =
-      c.depthTop != null
-        ? n(c.depthTop)
-        : i === 0
-          ? 0
-          : n(sorted[i - 1].depth);
+    const from = i === 0 ? 0 : n(sorted[i - 1].depth);
     const to = n(c.depth);
 
     // Redução: tenta pegar o diâmetro de saída (depois do "x")
@@ -114,7 +109,17 @@ export function ColumnDetailSchematic({ data }: Props) {
   // Slot extra para a extremidade (se houver gap após o último componente)
   const lastTo = segments.length ? segments[segments.length - 1].to : 0;
   const hasExtremSlot = extrem > lastTo + 1e-9 || segments.length === 0;
-  const slotCount = segments.length + (hasExtremSlot ? 1 : 0) || 1;
+  const tampaoOn = Boolean(data.tampao?.enabled);
+  const tampaoTop = n(data.tampao?.depthTop, NaN);
+  const tampaoBot = n(data.tampao?.depthBottom, NaN);
+  const hasTampaoSlot =
+    tampaoOn && (Number.isFinite(tampaoTop) || Number.isFinite(tampaoBot));
+
+  // coluna + extremidade + tampão opcional (depois da coluna)
+  const slotCount =
+    segments.length +
+      (hasExtremSlot ? 1 : 0) +
+      (hasTampaoSlot ? 1 : 0) || 1;
 
   const W = 960;
   const headerH = 96;
@@ -124,14 +129,15 @@ export function ColumnDetailSchematic({ data }: Props) {
   const svgH = colBottom + 100;
   const cx = 300;
   const casingW = 110;
+  const cardX = cx + 100;
+  const cardW = 340;
+  const tampaoSlotIndex =
+    segments.length + (hasExtremSlot ? 1 : 0);
 
   /** Y do topo do slot i (0-based) */
   const slotTop = (i: number) => topY + i * slotH;
   const slotMid = (i: number) => slotTop(i) + slotH / 2;
   const slotBot = (i: number) => slotTop(i) + slotH;
-
-  const cardX = cx + 90;
-  const cardW = 340;
 
   return (
     <div className="schematic-wrap">
@@ -623,6 +629,131 @@ export function ColumnDetailSchematic({ data }: Props) {
             );
           })()}
 
+        {/* Tampão opcional — após a coluna (não é trecho da coluna) */}
+        {hasTampaoSlot &&
+          (() => {
+            const i = tampaoSlotIndex;
+            const mid = slotMid(i);
+            const y0 = slotTop(i);
+            const casingInnerHalf = casingW / 2 - 16;
+            return (
+              <g>
+                <rect
+                  x={cx - casingW / 2 + 18}
+                  y={y0}
+                  width={casingW - 36}
+                  height={slotH}
+                  fill="#e2e8f0"
+                  opacity={0.55}
+                />
+                {/* Fecha o interior do revestimento de produção */}
+                <rect
+                  x={cx - casingInnerHalf}
+                  y={mid - 16}
+                  width={casingInnerHalf * 2}
+                  height={32}
+                  rx={3}
+                  fill="#1e293b"
+                  stroke="#0f172a"
+                />
+                <rect
+                  x={cx - casingInnerHalf + 4}
+                  y={mid - 11}
+                  width={casingInnerHalf * 2 - 8}
+                  height={22}
+                  rx={2}
+                  fill="#475569"
+                />
+                {[0, 1, 2].map((k) => (
+                  <line
+                    key={k}
+                    x1={cx - casingInnerHalf + 6}
+                    y1={mid - 6 + k * 6}
+                    x2={cx + casingInnerHalf - 6}
+                    y2={mid - 6 + k * 6}
+                    stroke="#94a3b8"
+                    strokeWidth={0.8}
+                    opacity={0.7}
+                  />
+                ))}
+                <path
+                  d={`M ${cx + casingInnerHalf + 4} ${mid} H ${cx + 58} L ${cardX - 6} ${mid}`}
+                  fill="none"
+                  stroke="#64748b"
+                  strokeWidth={1.3}
+                />
+                <g filter="url(#detShadow)">
+                  <rect
+                    x={cardX}
+                    y={mid - 26}
+                    width={cardW}
+                    height={52}
+                    rx={10}
+                    fill="#f8fafc"
+                    stroke="#cbd5e1"
+                  />
+                  <rect
+                    x={cardX}
+                    y={mid - 26}
+                    width={5}
+                    height={52}
+                    rx={2}
+                    fill="#475569"
+                  />
+                  <text
+                    x={cardX + 16}
+                    y={mid - 6}
+                    fontFamily={FONT}
+                    fontSize="13"
+                    fontWeight="700"
+                    fill="#0f172a"
+                  >
+                    {(data.tampao?.label || 'Tampão').length > 38
+                      ? (data.tampao?.label || 'Tampão').slice(0, 36) + '…'
+                      : data.tampao?.label || 'Tampão'}
+                  </text>
+                  <text
+                    x={cardX + 16}
+                    y={mid + 14}
+                    fontFamily={FONT}
+                    fontSize="11"
+                    fontWeight="600"
+                    fill="#64748b"
+                  >
+                    {Number.isFinite(tampaoTop) && Number.isFinite(tampaoBot)
+                      ? `Topo ${fmt(tampaoTop)} → Base ${fmt(tampaoBot)} m · após a coluna`
+                      : Number.isFinite(tampaoBot)
+                        ? `Base ${fmt(tampaoBot)} m · após a coluna`
+                        : 'Tampão (opcional)'}
+                  </text>
+                </g>
+                <text
+                  x={cx - casingW / 2 - 12}
+                  y={mid - 4}
+                  textAnchor="end"
+                  fontFamily={FONT}
+                  fontSize="11"
+                  fontWeight="700"
+                  fill="#334155"
+                >
+                  {Number.isFinite(tampaoTop) ? fmt(tampaoTop) : '—'} →{' '}
+                  {Number.isFinite(tampaoBot) ? fmt(tampaoBot) : '—'} m
+                </text>
+                <text
+                  x={cx - casingW / 2 - 12}
+                  y={mid + 12}
+                  textAnchor="end"
+                  fontFamily={FONT}
+                  fontSize="10"
+                  fontWeight="600"
+                  fill="#64748b"
+                >
+                  tampão
+                </text>
+              </g>
+            );
+          })()}
+
         {/* Footer */}
         <text
           x={36}
@@ -707,6 +838,63 @@ function SegmentOrnament({
               strokeWidth={0.8}
             />
           ))}
+        </g>
+      );
+    }
+    case 'packer': {
+      // Packer: elementos elastoméricos em anel/chevron até o revestimento
+      const outer = Math.max(tubeHalf + 6, casingInnerHalf);
+      const rings = 4;
+      const ringH = 6;
+      const gap = 2.5;
+      const blockH = rings * ringH + (rings - 1) * gap;
+      const y0 = y - blockH / 2;
+      return (
+        <g>
+          {Array.from({ length: rings }).map((_, i) => {
+            const yy = y0 + i * (ringH + gap);
+            return (
+              <polygon
+                key={i}
+                points={[
+                  `${cx - tubeHalf},${yy + 1}`,
+                  `${cx + tubeHalf},${yy + 1}`,
+                  `${cx + outer},${yy + ringH}`,
+                  `${cx - outer},${yy + ringH}`,
+                ].join(' ')}
+                fill="#1e293b"
+                stroke="#0f172a"
+                strokeWidth={0.8}
+              />
+            );
+          })}
+          {/* Marca “X” no anular (símbolo clássico de packer em diagramas) */}
+          <g stroke="#cbd5e1" strokeWidth={1.1} opacity={0.9}>
+            <line
+              x1={cx - (tubeHalf + outer) / 2}
+              y1={y - 8}
+              x2={cx - tubeHalf - 2}
+              y2={y + 8}
+            />
+            <line
+              x1={cx + (tubeHalf + outer) / 2}
+              y1={y - 8}
+              x2={cx + tubeHalf + 2}
+              y2={y + 8}
+            />
+            <line
+              x1={cx - tubeHalf - 2}
+              y1={y - 8}
+              x2={cx - (tubeHalf + outer) / 2}
+              y2={y + 8}
+            />
+            <line
+              x1={cx + tubeHalf + 2}
+              y1={y - 8}
+              x2={cx + (tubeHalf + outer) / 2}
+              y2={y + 8}
+            />
+          </g>
         </g>
       );
     }

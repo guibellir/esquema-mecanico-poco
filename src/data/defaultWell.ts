@@ -13,6 +13,12 @@ export const defaultWell: WellData = {
   donut: 'Donat: T 16; 7 1/16"',
   tubingSize: '2 7/8" EU',
   extremidadeColuna: 600.11,
+  tampao: {
+    enabled: true,
+    label: 'Tampão: 2 7/8" EU',
+    depthTop: 599.5,
+    depthBottom: 600,
+  },
   casings: [
     {
       id: 'c1',
@@ -71,13 +77,6 @@ export const defaultWell: WellData = {
     },
     { id: 't7', label: 'Filtro Cavis: 2 7/8" EU', depth: 560, kind: 'filter' },
     { id: 't8', label: '1 Tubo: 2 7/8" EU', depth: 590, kind: 'tubing' },
-    {
-      id: 't9',
-      label: 'Tampão: 2 7/8" EU',
-      depthTop: 599.5,
-      depth: 600,
-      kind: 'plug',
-    },
   ],
   perforations: [
     { id: 'p1', top: 584, bottom: 593, status: 'aberto' },

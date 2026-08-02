@@ -4,6 +4,7 @@ import type {
   TubingComponent,
   WellData,
 } from '../types';
+import { defaultTampao } from '../types';
 import { n } from '../utils/num';
 import { uid } from '../utils/id';
 import { NumInput } from './NumInput';
@@ -332,7 +333,7 @@ export function WellForm({ data, onChange }: Props) {
           A coluna termina na extremidade. Cada componente é um{' '}
           <strong>trecho</strong>: a profundidade é a <strong>base</strong>{' '}
           (onde ele termina e o próximo começa). O 1º começa em 0 m no topo.
-          Diferenças em cm são mostradas sem sobrepor na aba Detalhe da coluna.
+          O tampão <strong>não</strong> faz parte da coluna — configure abaixo.
         </p>
 
         {belowExtrem.length > 0 && (
@@ -371,50 +372,21 @@ export function WellForm({ data, onChange }: Props) {
                   <option value="stator">Estator / BCP</option>
                   <option value="screen">Crivo</option>
                   <option value="anchor">Âncora</option>
+                  <option value="packer">Packer</option>
                   <option value="filter">Filtro</option>
-                  <option value="plug">Tampão / Tampa</option>
                   <option value="joint">Junta</option>
                   <option value="other">Outro</option>
                 </select>
               </label>
-              {c.kind === 'plug' ? (
-                <div className="row">
-                  <label>
-                    Topo da tampa (m)
-                    <NumInput
-                      step="0.001"
-                      value={c.depthTop ?? null}
-                      onChange={(v) => updateComp(c.id, { depthTop: v })}
-                      placeholder="início do fechamento"
-                    />
-                  </label>
-                  <label>
-                    Base da tampa (m)
-                    <NumInput
-                      step="0.001"
-                      value={c.depth}
-                      onChange={(v) => updateComp(c.id, { depth: v })}
-                      placeholder="fim do fechamento"
-                    />
-                  </label>
-                </div>
-              ) : (
-                <label>
-                  Base do trecho (m)
-                  <NumInput
-                    step="0.001"
-                    value={c.depth}
-                    onChange={(v) => updateComp(c.id, { depth: v })}
-                    placeholder="fim do componente"
-                  />
-                </label>
-              )}
-              {c.kind === 'plug' && (
-                <p className="field-hint">
-                  A tampa fecha o interior do revestimento de produção entre
-                  topo e base.
-                </p>
-              )}
+              <label>
+                Base do trecho (m)
+                <NumInput
+                  step="0.001"
+                  value={c.depth}
+                  onChange={(v) => updateComp(c.id, { depth: v })}
+                  placeholder="fim do componente"
+                />
+              </label>
               {invalid && (
                 <p className="field-hint warn">
                   Deve ser ≤ extremidade ({data.extremidadeColuna} m)
@@ -430,6 +402,83 @@ export function WellForm({ data, onChange }: Props) {
             </div>
           );
         })}
+      </section>
+
+      <section className="form-section">
+        <div className="section-head">
+          <h2>Tampão (opcional)</h2>
+          <label className="toggle-inline">
+            <input
+              type="checkbox"
+              checked={data.tampao?.enabled ?? false}
+              onChange={(e) => {
+                const base = data.tampao ?? defaultTampao();
+                const enabled = e.target.checked;
+                const extrem = n(data.extremidadeColuna, 0);
+                set('tampao', {
+                  ...base,
+                  enabled,
+                  // ao ativar, sugere logo após a extremidade se vazio
+                  depthTop:
+                    enabled && base.depthTop == null
+                      ? extrem > 0
+                        ? extrem
+                        : null
+                      : base.depthTop,
+                  depthBottom:
+                    enabled && base.depthBottom == null
+                      ? extrem > 0
+                        ? extrem + 0.5
+                        : null
+                      : base.depthBottom,
+                  label: base.label || 'Tampão',
+                });
+              }}
+            />
+            Incluir tampão após a coluna
+          </label>
+        </div>
+        <p className="field-hint">
+          Não faz parte da coluna. Fecha o interior do revestimento de produção
+          entre <strong>topo</strong> e <strong>base</strong>.
+        </p>
+        {data.tampao?.enabled && (
+          <div className="card">
+            <label>
+              Descrição
+              <input
+                value={data.tampao.label}
+                onChange={(e) =>
+                  set('tampao', { ...data.tampao, label: e.target.value })
+                }
+              />
+            </label>
+            <div className="row">
+              <label>
+                Topo (m)
+                <NumInput
+                  step="0.001"
+                  value={data.tampao.depthTop}
+                  onChange={(v) =>
+                    set('tampao', { ...data.tampao, depthTop: v })
+                  }
+                  placeholder="início do fechamento"
+                />
+              </label>
+              <label>
+                Base (m)
+                <NumInput
+                  step="0.001"
+                  value={data.tampao.depthBottom}
+                  onChange={(v) =>
+                    set('tampao', { ...data.tampao, depthBottom: v })
+                  }
+                  placeholder="fim do fechamento"
+                />
+              </label>
+            </div>
+          </div>
+        )}
       </section>
     </form>
   );

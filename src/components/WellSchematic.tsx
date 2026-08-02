@@ -128,6 +128,8 @@ export function WellSchematic({ data }: Props) {
     num(data.totalDepth),
     num(data.fundoEncontrado),
     extremidade,
+    num(data.tampao?.depthBottom),
+    num(data.tampao?.depthTop),
     ...data.casings.map((c) => num(c.depthBottom)),
     ...data.components.map((c) => num(c.depth)),
     ...data.perforations.map((p) => num(p.bottom)),
@@ -209,11 +211,9 @@ export function WellSchematic({ data }: Props) {
     });
   }
 
-  // Componentes: Y fixo na pilha do fundo + tag ao lado
+  // Componentes da coluna (sem tampão)
   for (let i = 0; i < compsSorted.length; i++) {
     const c = compsSorted[i];
-    const from =
-      c.depthTop != null ? num(c.depthTop) : i === 0 ? null : num(compsSorted[i - 1].depth);
     const to = num(c.depth);
     rightItems.push({
       id: c.id,
@@ -221,10 +221,7 @@ export function WellSchematic({ data }: Props) {
       depth: to,
       fixedY: compStackYs[i],
       title: c.label,
-      subtitle:
-        c.kind === 'plug' && from != null
-          ? `Topo ${fmt(from)} → Base ${fmt(to)} m`
-          : `${fmt(to)} m`,
+      subtitle: `${fmt(to)} m`,
       tone: 'default',
     });
   }
@@ -237,6 +234,30 @@ export function WellSchematic({ data }: Props) {
     subtitle: 'Extremidade da coluna',
     tone: 'extrem',
   });
+
+  // Tampão opcional — depois da coluna (não é componente de coluna)
+  const tampaoOn = Boolean(data.tampao?.enabled);
+  const tampaoTop = num(data.tampao?.depthTop, NaN);
+  const tampaoBot = num(data.tampao?.depthBottom, NaN);
+  if (tampaoOn && Number.isFinite(tampaoBot)) {
+    const tampaoY =
+      (compStackYs.length
+        ? Math.max(...compStackYs)
+        : stackAnchorY - COMP_SLOT) + COMP_SLOT;
+    rightItems.push({
+      id: 'tampao',
+      kind: 'comp',
+      depth: Number.isFinite(tampaoTop)
+        ? (tampaoTop + tampaoBot) / 2
+        : tampaoBot,
+      fixedY: tampaoY,
+      title: data.tampao?.label || 'Tampão',
+      subtitle: Number.isFinite(tampaoTop)
+        ? `Topo ${fmt(tampaoTop)} → Base ${fmt(tampaoBot)} m`
+        : `Base ${fmt(tampaoBot)} m`,
+      tone: 'default',
+    });
+  }
 
   rightItems.push({
     id: 'fundo',
@@ -653,7 +674,6 @@ export function WellSchematic({ data }: Props) {
         {compsSorted.map((comp) => {
           if (comp.kind === 'tubing' || comp.kind === 'joint') return null;
           const y = compYById.get(comp.id) ?? stackAnchorY;
-          const plugH = COMP_SLOT * 0.7;
           return (
             <ComponentGlyph
               key={`g-${comp.id}`}
@@ -662,11 +682,31 @@ export function WellSchematic({ data }: Props) {
               y={y}
               tubingW={tubingW}
               casingInnerW={prodW - 10}
-              yTop={comp.kind === 'plug' ? y - plugH / 2 : undefined}
-              yBot={comp.kind === 'plug' ? y + plugH / 2 : undefined}
             />
           );
         })}
+
+        {/* Tampão opcional (após a coluna) — fecha o RV de produção */}
+        {tampaoOn &&
+          Number.isFinite(tampaoBot) &&
+          (() => {
+            const ri = rightItems.findIndex((r) => r.id === 'tampao');
+            const y =
+              ri >= 0 ? rightYs[ri] : stackAnchorY + COMP_SLOT;
+            const plugH = COMP_SLOT * 0.85;
+            return (
+              <ComponentGlyph
+                key="g-tampao"
+                kind="plug"
+                cx={wellCenterX}
+                y={y}
+                tubingW={tubingW}
+                casingInnerW={prodW - 10}
+                yTop={y - plugH / 2}
+                yBot={y + plugH / 2}
+              />
+            );
+          })()}
 
         {/* Perforations */}
         {data.perforations.map((p) => {
@@ -1229,11 +1269,12 @@ function ComponentGlyph({
   cx: number;
   y: number;
   tubingW: number;
-  /** Diâmetro interno do revestimento de produção (âncora encosta / tampão fecha) */
+  /** Diâmetro interno do revestimento de produção (âncora / tampão) */
   casingInnerW?: number;
   yTop?: number;
   yBot?: number;
 }) {
+  // kind "plug" só é usado para o tampão opcional (fora da lista da coluna)
   const half = tubingW / 2 + 3;
   const casingHalf = (casingInnerW ?? tubingW * 2.2) / 2;
 
@@ -1306,6 +1347,69 @@ function ComponentGlyph({
               strokeWidth={0.8}
             />
           ))}
+        </g>
+      );
+    }
+    case 'packer': {
+      // Packer de esquema mecânico: mandril + elementos elastoméricos
+      // (anéis/chevron) vedando o anular até a face interna do revestimento
+      const tubeR = tubingW / 2;
+      const casingR = Math.max(tubeR + 5, casingHalf);
+      const bodyH = 26;
+      const rings = 3;
+      const ringH = 5;
+      const gap = 2;
+      const blockH = rings * ringH + (rings - 1) * gap;
+      const y0 = y - blockH / 2;
+      return (
+        <g>
+          {/* Mandril (corpo no tubo) */}
+          <rect
+            x={cx - tubeR}
+            y={y - bodyH / 2}
+            width={tubeR * 2}
+            height={bodyH}
+            rx={2}
+            fill="url(#tubingMetal)"
+            stroke="#0f172a"
+          />
+          {/* Elementos de borracha — preenchem o anular (clássico em wellbore diagrams) */}
+          {Array.from({ length: rings }).map((_, i) => {
+            const yy = y0 + i * (ringH + gap);
+            // chevron / V invertido levemente: topo mais estreito no tubo, base larga no casing
+            return (
+              <g key={i}>
+                <polygon
+                  points={[
+                    `${cx - tubeR},${yy + 1}`,
+                    `${cx + tubeR},${yy + 1}`,
+                    `${cx + casingR},${yy + ringH}`,
+                    `${cx - casingR},${yy + ringH}`,
+                  ].join(' ')}
+                  fill="#1e293b"
+                  stroke="#0f172a"
+                  strokeWidth={0.7}
+                />
+                {/* “X” sutil no anular — símbolo comum de packer em diagramas */}
+                {i === 1 && (
+                  <g stroke="#94a3b8" strokeWidth={0.9} opacity={0.85}>
+                    <line
+                      x1={cx - (tubeR + casingR) / 2}
+                      y1={yy + 1}
+                      x2={cx - tubeR - 1}
+                      y2={yy + ringH - 0.5}
+                    />
+                    <line
+                      x1={cx + (tubeR + casingR) / 2}
+                      y1={yy + 1}
+                      x2={cx + tubeR + 1}
+                      y2={yy + ringH - 0.5}
+                    />
+                  </g>
+                )}
+              </g>
+            );
+          })}
         </g>
       );
     }

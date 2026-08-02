@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { WellForm } from './components/WellForm';
 import { WellSchematic } from './components/WellSchematic';
 import { ColumnDetailSchematic } from './components/ColumnDetailSchematic';
 import { defaultWell } from './data/defaultWell';
 import type { WellData } from './types';
 import {
-  downloadProject,
   loadProject,
   normalizeWellData,
-  saveProject,
+  saveProjectLocal,
+  saveProjectToDisk,
 } from './utils/storage';
 import { svgElementToPngDataUrl } from './utils/svgToPng';
 import './App.css';
@@ -29,37 +29,34 @@ function App() {
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
 
-  const jsonExport = useMemo(() => JSON.stringify(data, null, 2), [data]);
-
   const flashSave = useCallback((msg: string) => {
     setSaveMsg(msg);
     window.setTimeout(() => setSaveMsg(null), 2200);
   }, []);
 
-  const handleSave = () => {
-    const project = saveProject(data);
-    flashSave(
-      `Projeto salvo · ${new Date(project.savedAt).toLocaleString('pt-BR')}`
-    );
-  };
-
-  const handleSaveFile = () => {
-    saveProject(data);
-    downloadProject(data);
-    flashSave('Projeto salvo no navegador e arquivo baixado');
-  };
+  const handleSaveToDisk = useCallback(async () => {
+    const result = await saveProjectToDisk(data);
+    if (!result.ok) {
+      flashSave('Salvamento cancelado');
+      return;
+    }
+    if (result.method === 'picker') {
+      flashSave(`Salvo no disco: ${result.name}`);
+    } else {
+      flashSave(`Arquivo baixado: ${result.name} (use Abrir projeto para reabrir)`);
+    }
+  }, [data, flashSave]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        saveProject(data);
-        flashSave('Projeto salvo');
+        void handleSaveToDisk();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [data, flashSave]);
+  }, [handleSaveToDisk]);
 
   const handleExportSvg = () => {
     const sel =
@@ -84,16 +81,6 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
-  const handleExportJson = () => {
-    const blob = new Blob([jsonExport], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `poco-${data.wellName.replace(/\s+/g, '_')}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const handleImportJson = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -102,8 +89,8 @@ function App() {
         const norm = normalizeWellData(parsed);
         if (norm) {
           setData(norm);
-          saveProject(norm);
-          flashSave('Projeto importado e salvo');
+          saveProjectLocal(norm);
+          flashSave('Projeto aberto · use Salvar projeto para gravar no disco');
         } else {
           alert('JSON inválido: faltam campos obrigatórios.');
         }
@@ -241,13 +228,18 @@ function App() {
           <button type="button" onClick={() => setData(defaultWell)}>
             Exemplo CAU-07
           </button>
-          <button type="button" className="btn-primary" onClick={handleSave}>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => void handleSaveToDisk()}
+            title="Salva um arquivo .json no disco (pode reabrir depois)"
+          >
             Salvar projeto
           </button>
-          <button type="button" onClick={handleSaveFile}>
-            Salvar arquivo
-          </button>
-          <label className="btn-file">
+          <label
+            className="btn-file"
+            title="Abre um arquivo .json de projeto salvo no disco"
+          >
             Abrir projeto
             <input
               type="file"
@@ -260,9 +252,6 @@ function App() {
               }}
             />
           </label>
-          <button type="button" onClick={handleExportJson}>
-            Exportar JSON
-          </button>
           <button
             type="button"
             className="btn-primary"

@@ -221,6 +221,26 @@
   box-shadow: inset 0 0 0 1px rgba(240, 160, 168, 0.15);
 }
 
+.toggle-inline {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem !important;
+  font-weight: 600;
+  color: #9fe3c0;
+  margin: 0 !important;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-inline input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  accent-color: #0d7a4f;
+  cursor: pointer;
+}
+
 .canvas-scroll {
   flex: 1;
   overflow: auto;

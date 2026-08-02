@@ -14,11 +14,6 @@ export type TubingComponent = {
   label: string;
   /** Base (fim) do trecho em m — início = base do componente anterior (ou 0) */
   depth: number | null;
-  /**
-   * Topo do trecho (m). Obrigatório p/ tampão/tampa (fecha o furo do
-   * revestimento de produção entre topo e base). Opcional nos demais.
-   */
-  depthTop?: number | null;
   kind:
     | 'tubing'
     | 'reducer'
@@ -26,9 +21,19 @@ export type TubingComponent = {
     | 'screen'
     | 'anchor'
     | 'filter'
-    | 'plug'
+    | 'packer'
     | 'joint'
     | 'other';
+};
+
+/** Tampão / tampa — opcional, DEPOIS da coluna (não faz parte da coluna) */
+export type TampaoConfig = {
+  enabled: boolean;
+  label: string;
+  /** Topo do fechamento (m) */
+  depthTop: number | null;
+  /** Base do fechamento (m) */
+  depthBottom: number | null;
 };
 
 export type Perforation = {
@@ -49,8 +54,10 @@ export type WellData = {
   wellhead: string;
   donut: string;
   tubingSize: string;
-  /** Extremidade da coluna de produção (m) — componentes ficam acima */
+  /** Extremidade da coluna de produção (m) — componentes da coluna ficam acima */
   extremidadeColuna: number | null;
+  /** Tampão opcional após a coluna */
+  tampao: TampaoConfig;
   casings: CasingPhase[];
   components: TubingComponent[];
   perforations: Perforation[];
@@ -61,3 +68,10 @@ export type ProjectFile = {
   savedAt: string;
   data: WellData;
 };
+
+export const defaultTampao = (): TampaoConfig => ({
+  enabled: false,
+  label: 'Tampão',
+  depthTop: null,
+  depthBottom: null,
+});
