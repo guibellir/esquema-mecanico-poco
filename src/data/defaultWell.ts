@@ -1,0 +1,86 @@
+import type { WellData } from '../types';
+
+/** Dados de exemplo baseados no poço 07-CAU-07D-SE (última intervenção 27/01/2010) */
+export const defaultWell: WellData = {
+  wellName: '07-CAU-07D-SE',
+  lastIntervention: '27-01-2010',
+  elevacaoMR: 9.0,
+  elevacaoBAP: 5.952,
+  totalDepth: 700,
+  fundoEncontrado: 654.77,
+  fundoData: '27/01/2010',
+  wellhead: 'Cab. de Produção: 5 1/2" but; 7 1/16" - 2000psi',
+  donut: 'Donat: T 16; 7 1/16"',
+  tubingSize: '2 7/8" EU',
+  extremidadeColuna: 600.11,
+  casings: [
+    {
+      id: 'c1',
+      name: 'Revestimento 20"',
+      diameter: '20"',
+      grade: '',
+      weight: '',
+      depthTop: 0,
+      depthBottom: 17,
+    },
+    {
+      id: 'c2',
+      name: 'Revestimento de Superfície 13.3/8"',
+      diameter: '13.3/8"',
+      grade: 'K-55',
+      weight: '54,5 lb/ft',
+      depthTop: 0,
+      depthBottom: 99,
+    },
+    {
+      id: 'c3',
+      name: 'Revestimento de Produção 5.1/2"',
+      diameter: '5.1/2"',
+      grade: 'K-55',
+      weight: '15,5 lb/ft',
+      depthTop: 0,
+      depthBottom: 700,
+    },
+  ],
+  components: [
+    { id: 't1', label: '000 Tubos: 2 7/8" EU', depth: 80, kind: 'tubing' },
+    {
+      id: 't2',
+      label: 'Redução: 2 7/8" EU x 2 3/8" EU',
+      depth: 200,
+      kind: 'reducer',
+    },
+    { id: 't3', label: 'Estator do BCP: 2 3/8"', depth: 280, kind: 'stator' },
+    {
+      id: 't4',
+      label: 'Crivo com pino limitador: 2 3/8" EU',
+      depth: 420,
+      kind: 'screen',
+    },
+    {
+      id: 't5',
+      label: 'Redução: 2 3/8" EU x 2 7/8" EU',
+      depth: 460,
+      kind: 'reducer',
+    },
+    {
+      id: 't6',
+      label: 'Âncora de torque: 2 7/8" EU; 5 1/2"',
+      depth: 520,
+      kind: 'anchor',
+    },
+    { id: 't7', label: 'Filtro Cavis: 2 7/8" EU', depth: 560, kind: 'filter' },
+    { id: 't8', label: '1 Tubo: 2 7/8" EU', depth: 590, kind: 'tubing' },
+    {
+      id: 't9',
+      label: 'Tampão: 2 7/8" EU',
+      depthTop: 599.5,
+      depth: 600,
+      kind: 'plug',
+    },
+  ],
+  perforations: [
+    { id: 'p1', top: 584, bottom: 593, status: 'aberto' },
+    { id: 'p2', top: 639.2, bottom: 641.7, status: 'aberto' },
+  ],
+};
