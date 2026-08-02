@@ -38,6 +38,7 @@ function App() {
   );
   const [mobileStep, setMobileStep] = useState<MobileStep>('params');
   const [moreOpen, setMoreOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const openFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -319,6 +320,14 @@ function App() {
 
         {/* Desktop: todas as ações */}
         <div className="header-actions header-actions-desktop">
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => setLibraryOpen(true)}
+            title="Biblioteca de esquemas na nuvem"
+          >
+            Projetos na nuvem
+          </button>
           <button type="button" onClick={() => setPanelOpen((v) => !v)}>
             {panelOpen ? 'Ocultar painel' : 'Mostrar painel'}
           </button>
@@ -327,18 +336,17 @@ function App() {
           </button>
           <button
             type="button"
-            className="btn-primary"
             onClick={() => void handleSaveToDisk()}
             title="Salva um arquivo .json no disco"
           >
-            Salvar projeto
+            Salvar JSON
           </button>
           <button
             type="button"
             onClick={() => void handleOpenProject()}
             title="Importa um arquivo .json de projeto salvo"
           >
-            Abrir / Importar JSON
+            Importar JSON
           </button>
           <button
             type="button"
@@ -366,6 +374,16 @@ function App() {
           )}
           <button
             type="button"
+            className="btn-primary"
+            onClick={() => {
+              setMoreOpen(false);
+              setLibraryOpen(true);
+            }}
+          >
+            Nuvem
+          </button>
+          <button
+            type="button"
             className="btn-more"
             aria-expanded={moreOpen}
             onClick={() => setMoreOpen((v) => !v)}
@@ -389,11 +407,20 @@ function App() {
           <button
             type="button"
             onClick={() => {
+              setMoreOpen(false);
+              setLibraryOpen(true);
+            }}
+          >
+            Projetos na nuvem
+          </button>
+          <button
+            type="button"
+            onClick={() => {
               void handleSaveToDisk();
               setMoreOpen(false);
             }}
           >
-            Salvar projeto (.json)
+            Salvar JSON (disco)
           </button>
           <button
             type="button"
@@ -402,7 +429,7 @@ function App() {
               setMoreOpen(false);
             }}
           >
-            Abrir / Importar JSON
+            Importar JSON
           </button>
           {mobileStep === 'scheme' && (
             <>
@@ -481,14 +508,6 @@ function App() {
       >
         {showForm && (
           <aside className="sidebar">
-            <CloudPanel
-              data={data}
-              onLoadProject={(well) => {
-                setData(well);
-                saveProjectLocal(well);
-              }}
-              onMessage={flashSave}
-            />
             <WellForm data={data} onChange={setData} />
           </aside>
         )}
@@ -572,6 +591,17 @@ function App() {
           </button>
         </div>
       )}
+
+      <CloudPanel
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        data={data}
+        onLoadProject={(well) => {
+          setData(well);
+          saveProjectLocal(well);
+        }}
+        onMessage={flashSave}
+      />
 
       {/* Fonte dos SVGs para rasterizar (fora da tela, com tamanho real) */}
       <div className="print-root" aria-hidden="true">

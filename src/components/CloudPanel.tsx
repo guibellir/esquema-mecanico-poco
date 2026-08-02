@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { WellData } from '../types';
 import {
   createProject,
@@ -16,12 +16,20 @@ import {
 } from '../utils/cloudApi';
 
 type Props = {
+  open: boolean;
+  onClose: () => void;
   data: WellData;
   onLoadProject: (data: WellData) => void;
   onMessage: (msg: string) => void;
 };
 
-export function CloudPanel({ data, onLoadProject, onMessage }: Props) {
+export function CloudPanel({
+  open,
+  onClose,
+  data,
+  onLoadProject,
+  onMessage,
+}: Props) {
   const configured = isCloudConfigured();
   const [user, setUser] = useState<CloudUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,6 +39,7 @@ export function CloudPanel({ data, onLoadProject, onMessage }: Props) {
   const [projects, setProjects] = useState<CloudProjectSummary[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [query, setQuery] = useState('');
 
   const refresh = async () => {
     if (!configured) {
@@ -42,8 +51,7 @@ export function CloudPanel({ data, onLoadProject, onMessage }: Props) {
       const u = await me();
       setUser(u);
       if (u) {
-        const list = await listProjects();
-        setProjects(list);
+        setProjects(await listProjects());
       } else {
         setProjects([]);
         setCurrentId(null);
@@ -56,9 +64,24 @@ export function CloudPanel({ data, onLoadProject, onMessage }: Props) {
   };
 
   useEffect(() => {
-    void refresh();
+    if (open) void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return projects;
+    return projects.filter((p) => p.name.toLowerCase().includes(q));
+  }, [projects, query]);
 
   const handleAuth = async () => {
     setBusy(true);
@@ -73,8 +96,7 @@ export function CloudPanel({ data, onLoadProject, onMessage }: Props) {
         onMessage(`Conta criada: ${r.user.email}`);
       }
       setPassword('');
-      const list = await listProjects();
-      setProjects(list);
+      setProjects(await listProjects());
     } catch (e) {
       onMessage(e instanceof Error ? e.message : 'Falha no login');
     } finally {
@@ -128,7 +150,8 @@ export function CloudPanel({ data, onLoadProject, onMessage }: Props) {
       const p = await getProject(id);
       onLoadProject(p.data);
       setCurrentId(p.id);
-      onMessage(`Aberto da nuvem: ${p.name}`);
+      onMessage(`Aberto: ${p.name}`);
+      onClose();
     } catch (e) {
       onMessage(e instanceof Error ? e.message : 'Erro ao abrir');
     } finally {
@@ -151,165 +174,220 @@ export function CloudPanel({ data, onLoadProject, onMessage }: Props) {
     }
   };
 
-  if (!configured) {
-    return (
-      <section className="form-section cloud-panel">
-        <h2>Nuvem</h2>
-        <p className="field-hint">
-          API não configurada neste ambiente. No Vercel, defina{' '}
-          <code>VITE_API_URL</code>.
-        </p>
-      </section>
-    );
-  }
+  if (!open) return null;
 
   return (
-    <section className="form-section cloud-panel">
-      <h2>Nuvem (VPS)</h2>
-      {loading ? (
-        <p className="field-hint">Conectando…</p>
-      ) : !user ? (
-        <>
-          <p className="field-hint">
-            Entre para salvar e abrir projetos no seu servidor.
-          </p>
-          <div className="cloud-auth-tabs">
-            <button
-              type="button"
-              className={mode === 'login' ? 'active' : ''}
-              onClick={() => setMode('login')}
-            >
-              Entrar
-            </button>
-            <button
-              type="button"
-              className={mode === 'register' ? 'active' : ''}
-              onClick={() => setMode('register')}
-            >
-              Criar conta
-            </button>
+    <div className="library-overlay no-print" role="dialog" aria-modal="true">
+      <button
+        type="button"
+        className="library-backdrop"
+        aria-label="Fechar"
+        onClick={onClose}
+      />
+      <div className="library-panel">
+        <header className="library-header">
+          <div>
+            <p className="library-kicker">Biblioteca</p>
+            <h2>Projetos na nuvem</h2>
+            <p className="library-sub">
+              Esquemas salvos no seu servidor · separados da edição de parâmetros
+            </p>
           </div>
-          <label>
-            Email
-            <input
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </label>
-          <label>
-            Senha
-            <input
-              type="password"
-              autoComplete={
-                mode === 'login' ? 'current-password' : 'new-password'
-              }
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </label>
-          <button
-            type="button"
-            className="btn-sm cloud-btn"
-            disabled={busy || !email || password.length < 6}
-            onClick={() => void handleAuth()}
-          >
-            {busy
-              ? 'Aguarde…'
-              : mode === 'login'
-                ? 'Entrar'
-                : 'Criar conta'}
+          <button type="button" className="library-close" onClick={onClose}>
+            Fechar
           </button>
-        </>
-      ) : (
-        <>
-          <p className="field-hint">
-            Logado como <strong>{user.email}</strong>
-            {currentId ? ' · projeto em edição na nuvem' : ''}
-          </p>
-          <div className="cloud-actions">
-            <button
-              type="button"
-              className="btn-sm cloud-btn"
-              disabled={busy}
-              onClick={() => void handleSaveCloud()}
-            >
-              {currentId ? 'Atualizar na nuvem' : 'Salvar na nuvem'}
-            </button>
-            {currentId && (
+        </header>
+
+        {!configured ? (
+          <div className="library-empty">
+            <h3>API não configurada</h3>
+            <p>
+              Defina <code>VITE_API_URL</code> no ambiente de build (Vercel).
+            </p>
+          </div>
+        ) : loading ? (
+          <div className="library-empty">
+            <p>Carregando biblioteca…</p>
+          </div>
+        ) : !user ? (
+          <div className="library-auth">
+            <div className="library-auth-card">
+              <h3>Acesse sua conta</h3>
+              <p>Entre para ver e salvar esquemas no servidor.</p>
+              <div className="cloud-auth-tabs">
+                <button
+                  type="button"
+                  className={mode === 'login' ? 'active' : ''}
+                  onClick={() => setMode('login')}
+                >
+                  Entrar
+                </button>
+                <button
+                  type="button"
+                  className={mode === 'register' ? 'active' : ''}
+                  onClick={() => setMode('register')}
+                >
+                  Criar conta
+                </button>
+              </div>
+              <label>
+                Email
+                <input
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </label>
+              <label>
+                Senha
+                <input
+                  type="password"
+                  autoComplete={
+                    mode === 'login' ? 'current-password' : 'new-password'
+                  }
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </label>
               <button
                 type="button"
-                className="btn-sm"
-                disabled={busy}
-                onClick={() => void handleSaveAsNew()}
+                className="library-primary"
+                disabled={busy || !email || password.length < 6}
+                onClick={() => void handleAuth()}
               >
-                Salvar como novo
+                {busy
+                  ? 'Aguarde…'
+                  : mode === 'login'
+                    ? 'Entrar'
+                    : 'Criar conta'}
               </button>
-            )}
-            <button
-              type="button"
-              className="btn-danger-sm"
-              disabled={busy}
-              onClick={() => {
-                logout();
-                setUser(null);
-                setProjects([]);
-                setCurrentId(null);
-                onMessage('Saiu da conta');
-              }}
-            >
-              Sair
-            </button>
+            </div>
           </div>
+        ) : (
+          <>
+            <div className="library-toolbar">
+              <div className="library-user">
+                <span className="library-avatar">
+                  {user.email.slice(0, 1).toUpperCase()}
+                </span>
+                <div>
+                  <strong>{user.email}</strong>
+                  <span>
+                    {projects.length} projeto
+                    {projects.length === 1 ? '' : 's'}
+                    {currentId ? ' · editando na nuvem' : ''}
+                  </span>
+                </div>
+              </div>
+              <div className="library-toolbar-actions">
+                <button
+                  type="button"
+                  className="library-primary"
+                  disabled={busy}
+                  onClick={() => void handleSaveCloud()}
+                >
+                  {currentId ? 'Atualizar projeto atual' : 'Salvar poço atual'}
+                </button>
+                {currentId && (
+                  <button
+                    type="button"
+                    className="library-secondary"
+                    disabled={busy}
+                    onClick={() => void handleSaveAsNew()}
+                  >
+                    Salvar como novo
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="library-ghost"
+                  disabled={busy}
+                  onClick={() => void refresh()}
+                >
+                  Atualizar lista
+                </button>
+                <button
+                  type="button"
+                  className="library-ghost"
+                  disabled={busy}
+                  onClick={() => {
+                    logout();
+                    setUser(null);
+                    setProjects([]);
+                    setCurrentId(null);
+                    onMessage('Saiu da conta');
+                  }}
+                >
+                  Sair
+                </button>
+              </div>
+            </div>
 
-          <div className="section-head" style={{ marginTop: '0.75rem' }}>
-            <h2 style={{ margin: 0 }}>Meus projetos</h2>
-            <button
-              type="button"
-              className="btn-sm"
-              disabled={busy}
-              onClick={() => void refresh()}
-            >
-              Atualizar
-            </button>
-          </div>
-          {projects.length === 0 ? (
-            <p className="field-hint">Nenhum projeto na nuvem ainda.</p>
-          ) : (
-            <ul className="cloud-project-list">
-              {projects.map((p) => (
-                <li key={p.id} className={p.id === currentId ? 'current' : ''}>
-                  <div>
-                    <strong>{p.name}</strong>
-                    <span>
-                      {new Date(p.updated_at).toLocaleString('pt-BR')}
-                    </span>
-                  </div>
-                  <div className="cloud-project-btns">
-                    <button
-                      type="button"
-                      className="btn-sm"
-                      disabled={busy}
-                      onClick={() => void handleOpen(p.id)}
+            <div className="library-search-row">
+              <input
+                type="search"
+                placeholder="Buscar por nome do poço…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+
+            {filtered.length === 0 ? (
+              <div className="library-empty">
+                <h3>Nenhum projeto encontrado</h3>
+                <p>
+                  {projects.length === 0
+                    ? 'Salve o poço atual na nuvem para começar sua biblioteca.'
+                    : 'Nenhum resultado para essa busca.'}
+                </p>
+              </div>
+            ) : (
+              <div className="library-grid">
+                {filtered.map((p) => {
+                  const active = p.id === currentId;
+                  return (
+                    <article
+                      key={p.id}
+                      className={`library-card ${active ? 'is-active' : ''}`}
                     >
-                      Abrir
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-danger-sm"
-                      disabled={busy}
-                      onClick={() => void handleDelete(p.id)}
-                    >
-                      Apagar
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
-    </section>
+                      <div className="library-card-top">
+                        <div className="library-card-icon" aria-hidden>
+                          ⛽
+                        </div>
+                        {active && <span className="library-badge">Aberto</span>}
+                      </div>
+                      <h3 title={p.name}>{p.name}</h3>
+                      <p>
+                        Atualizado{' '}
+                        {new Date(p.updated_at).toLocaleString('pt-BR')}
+                      </p>
+                      <div className="library-card-actions">
+                        <button
+                          type="button"
+                          className="library-primary"
+                          disabled={busy}
+                          onClick={() => void handleOpen(p.id)}
+                        >
+                          Abrir esquema
+                        </button>
+                        <button
+                          type="button"
+                          className="library-danger"
+                          disabled={busy}
+                          onClick={() => void handleDelete(p.id)}
+                        >
+                          Apagar
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 }
