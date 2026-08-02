@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { WellForm } from './components/WellForm';
 import { WellSchematic } from './components/WellSchematic';
 import { ColumnDetailSchematic } from './components/ColumnDetailSchematic';
+import { CloudPanel } from './components/CloudPanel';
 import { defaultWell } from './data/defaultWell';
 import type { WellData } from './types';
 import {
@@ -480,6 +481,14 @@ function App() {
       >
         {showForm && (
           <aside className="sidebar">
+            <CloudPanel
+              data={data}
+              onLoadProject={(well) => {
+                setData(well);
+                saveProjectLocal(well);
+              }}
+              onMessage={flashSave}
+            />
             <WellForm data={data} onChange={setData} />
           </aside>
         )}

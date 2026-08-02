@@ -253,6 +253,91 @@
   cursor: pointer;
 }
 
+.cloud-panel code {
+  font-size: 0.7rem;
+  color: #9fe3c0;
+}
+
+.cloud-auth-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+}
+
+.cloud-auth-tabs button {
+  flex: 1;
+  appearance: none;
+  border: 1px solid #2a3645;
+  background: #121a24;
+  color: #8b9aab;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.4rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.cloud-auth-tabs button.active {
+  background: #234a38;
+  border-color: #2a5c45;
+  color: #9fe3c0;
+}
+
+.cloud-btn {
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.5rem !important;
+}
+
+.cloud-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.cloud-project-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.cloud-project-list li {
+  background: #121a24;
+  border: 1px solid #2a3645;
+  border-radius: 8px;
+  padding: 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.cloud-project-list li.current {
+  border-color: #109463;
+}
+
+.cloud-project-list strong {
+  display: block;
+  font-size: 0.82rem;
+  color: #e7ecf1;
+}
+
+.cloud-project-list span {
+  font-size: 0.7rem;
+  color: #8b9aab;
+}
+
+.cloud-project-btns {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.cloud-project-btns .btn-danger-sm {
+  margin-top: 0;
+}
+
 .canvas-scroll {
   flex: 1;
   overflow: auto;
