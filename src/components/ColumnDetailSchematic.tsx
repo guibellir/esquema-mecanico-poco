@@ -123,7 +123,10 @@ export function ColumnDetailSchematic({ data }: Props) {
 
   const W = 960;
   const headerH = 96;
-  const topY = headerH + 52;
+  const tipBandH = 36; // faixa da dica — sem cruzar o desenho
+  const wellheadBandH = 56; // espaço só da cabeça de produção
+  // Desenho da coluna começa DEPOIS do header + dica + árvore
+  const topY = headerH + tipBandH + wellheadBandH;
   const slotH = 78; // altura visual fixa por componente — sem sobreposição
   const colBottom = topY + slotCount * slotH;
   const svgH = colBottom + 100;
@@ -133,6 +136,8 @@ export function ColumnDetailSchematic({ data }: Props) {
   const cardW = 340;
   const tampaoSlotIndex =
     segments.length + (hasExtremSlot ? 1 : 0);
+  const tipY = headerH + 8;
+  const wellheadTop = headerH + tipBandH + 6;
 
   /** Y do topo do slot i (0-based) */
   const slotTop = (i: number) => topY + i * slotH;
@@ -230,14 +235,23 @@ export function ColumnDetailSchematic({ data }: Props) {
           Escala visual uniforme · {segments.length} trechos
         </text>
 
-        {/* Info pill */}
-        <g transform={`translate(36, ${headerH + 14})`}>
-          <rect width={420} height={26} rx={13} fill="#fff" stroke="#cbd5e1" />
+        {/* Dica em faixa própria (não cruza a coluna) */}
+        <g>
+          <rect
+            x={36}
+            y={tipY}
+            width={W - 72}
+            height={28}
+            rx={10}
+            fill="#ecfdf5"
+            stroke="#a7f3d0"
+          />
           <text
-            x="14"
-            y="17"
+            x={W / 2}
+            y={tipY + 18}
+            textAnchor="middle"
             fontFamily={FONT}
-            fontSize="11"
+            fontSize="12"
             fontWeight="600"
             fill="#0f766e"
           >
@@ -245,12 +259,12 @@ export function ColumnDetailSchematic({ data }: Props) {
           </text>
         </g>
 
-        {/* Formation / casing bed */}
+        {/* Formation / casing bed — começa sob a cabeça */}
         <rect
           x={cx - casingW / 2}
-          y={topY - 6}
+          y={wellheadTop + 40}
           width={casingW}
-          height={colBottom - topY + 12}
+          height={colBottom - (wellheadTop + 40) + 12}
           rx={14}
           fill="#fef3c7"
           stroke="#f59e0b"
@@ -261,25 +275,25 @@ export function ColumnDetailSchematic({ data }: Props) {
         {/* Casing walls */}
         <rect
           x={cx - casingW / 2 + 6}
-          y={topY}
+          y={wellheadTop + 44}
           width={10}
-          height={colBottom - topY}
+          height={colBottom - (wellheadTop + 44)}
           fill="url(#detPipe)"
           stroke="#334155"
         />
         <rect
           x={cx + casingW / 2 - 16}
-          y={topY}
+          y={wellheadTop + 44}
           width={10}
-          height={colBottom - topY}
+          height={colBottom - (wellheadTop + 44)}
           fill="url(#detPipe)"
           stroke="#334155"
         />
 
-        {/* Cabeça de produção + coluna entrando nela */}
+        {/* Cabeça de produção + coluna entrando nela (abaixo da dica) */}
         {(() => {
           const firstW = segments[0]?.width ?? 28;
-          const tubingTop = topY - 44;
+          const tubingTop = wellheadTop + 4;
           const tubingTo =
             segments.length > 0 ? slotTop(0) + 2 : topY + 20;
           return (
@@ -307,7 +321,7 @@ export function ColumnDetailSchematic({ data }: Props) {
               {/* Árvore / flanges */}
               <rect
                 x={cx - 28}
-                y={topY - 48}
+                y={wellheadTop}
                 width={56}
                 height={14}
                 rx={3}
@@ -316,7 +330,7 @@ export function ColumnDetailSchematic({ data }: Props) {
               />
               <rect
                 x={cx - 42}
-                y={topY - 32}
+                y={wellheadTop + 16}
                 width={84}
                 height={12}
                 rx={3}
@@ -325,7 +339,7 @@ export function ColumnDetailSchematic({ data }: Props) {
               />
               <rect
                 x={cx - 32}
-                y={topY - 18}
+                y={wellheadTop + 30}
                 width={64}
                 height={16}
                 rx={2}
@@ -335,7 +349,7 @@ export function ColumnDetailSchematic({ data }: Props) {
               {/* Hangar do tubo */}
               <rect
                 x={cx - firstW / 2 - 5}
-                y={topY - 10}
+                y={wellheadTop + 38}
                 width={firstW + 10}
                 height={7}
                 rx={1.5}
