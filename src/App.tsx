@@ -14,6 +14,10 @@ import { svgElementToPngDataUrl } from './utils/svgToPng';
 import './App.css';
 
 type ViewTab = 'well' | 'column';
+/** Fluxo mobile: primeiro parâmetros, depois o desenho */
+type MobileStep = 'params' | 'scheme';
+
+const MOBILE_MQ = '(max-width: 900px)';
 
 function App() {
   const [data, setData] = useState<WellData>(() => {
@@ -28,7 +32,25 @@ function App() {
   const [tab, setTab] = useState<ViewTab>('well');
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia(MOBILE_MQ).matches : false
+  );
+  const [mobileStep, setMobileStep] = useState<MobileStep>('params');
+  const [moreOpen, setMoreOpen] = useState(false);
   const openFileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia(MOBILE_MQ);
+    const onChange = () => {
+      setIsMobile(mq.matches);
+      if (!mq.matches) {
+        setMobileStep('params');
+        setMoreOpen(false);
+      }
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
   const flashSave = useCallback((msg: string) => {
     setSaveMsg(msg);
@@ -256,20 +278,46 @@ function App() {
     }
   };
 
+  const showForm = isMobile
+    ? mobileStep === 'params'
+    : panelOpen;
+  const showScheme = isMobile
+    ? mobileStep === 'scheme'
+    : true;
+
+  const goToScheme = () => {
+    setMobileStep('scheme');
+    setMoreOpen(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const goToParams = () => {
+    setMobileStep('params');
+    setMoreOpen(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
-    <div className="app">
+    <div
+      className={`app ${isMobile ? `app-mobile app-mobile-${mobileStep}` : 'app-desktop'}`}
+    >
       <header className="app-header no-print">
         <div className="brand">
           <span className="brand-mark">⛽</span>
           <div>
             <h1>Esquema Mecânico de Poço</h1>
-            <p>
-              Gere diagramas a partir de profundidade, sapatas, fases e
-              canhoneado
+            <p className="brand-sub">
+              {isMobile
+                ? mobileStep === 'params'
+                  ? '1/2 · Preencha os parâmetros do poço'
+                  : '2/2 · Esquema gerado'
+                : 'Gere diagramas a partir de profundidade, sapatas, fases e canhoneado'}
             </p>
           </div>
         </div>
-        <div className="header-actions">
+
+        {/* Desktop: todas as ações */}
+        <div className="header-actions header-actions-desktop">
           <button type="button" onClick={() => setPanelOpen((v) => !v)}>
             {panelOpen ? 'Ocultar painel' : 'Mostrar painel'}
           </button>
@@ -291,17 +339,6 @@ function App() {
           >
             Abrir / Importar JSON
           </button>
-          <input
-            ref={openFileRef}
-            type="file"
-            accept="application/json,.json,text/json,.txt"
-            hidden
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void importProjectJson(f, f.name);
-              e.target.value = '';
-            }}
-          />
           <button
             type="button"
             className="btn-primary"
@@ -318,57 +355,214 @@ function App() {
             {printing ? 'Preparando…' : 'Imprimir / PDF'}
           </button>
         </div>
+
+        {/* Mobile: ações compactas por etapa */}
+        <div className="header-actions header-actions-mobile">
+          {mobileStep === 'scheme' && (
+            <button type="button" className="btn-ghost" onClick={goToParams}>
+              ← Parâmetros
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn-more"
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen((v) => !v)}
+          >
+            Mais
+          </button>
+        </div>
       </header>
+
+      {moreOpen && isMobile && (
+        <div className="mobile-more no-print">
+          <button
+            type="button"
+            onClick={() => {
+              setData(defaultWell);
+              setMoreOpen(false);
+            }}
+          >
+            Exemplo CAU-07
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void handleSaveToDisk();
+              setMoreOpen(false);
+            }}
+          >
+            Salvar projeto (.json)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void handleOpenProject();
+              setMoreOpen(false);
+            }}
+          >
+            Abrir / Importar JSON
+          </button>
+          {mobileStep === 'scheme' && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  handleExportSvg();
+                  setMoreOpen(false);
+                }}
+              >
+                Baixar SVG
+              </button>
+              <button
+                type="button"
+                disabled={printing}
+                onClick={() => {
+                  void handlePrint();
+                  setMoreOpen(false);
+                }}
+              >
+                {printing ? 'Preparando…' : 'Imprimir / PDF'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      <input
+        ref={openFileRef}
+        type="file"
+        accept="application/json,.json,text/json,.txt"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void importProjectJson(f, f.name);
+          e.target.value = '';
+        }}
+      />
 
       {saveMsg && <div className="save-toast no-print">{saveMsg}</div>}
 
+      {/* Stepper mobile */}
+      {isMobile && (
+        <nav className="mobile-stepper no-print" aria-label="Etapas">
+          <button
+            type="button"
+            className={mobileStep === 'params' ? 'active' : ''}
+            onClick={goToParams}
+          >
+            <span className="step-num">1</span>
+            Parâmetros
+          </button>
+          <span className="step-sep" aria-hidden>
+            →
+          </span>
+          <button
+            type="button"
+            className={mobileStep === 'scheme' ? 'active' : ''}
+            onClick={goToScheme}
+          >
+            <span className="step-num">2</span>
+            Esquema
+          </button>
+        </nav>
+      )}
+
       <main
-        className={`app-main no-print ${panelOpen ? '' : 'panel-collapsed'}`}
+        className={[
+          'app-main',
+          'no-print',
+          !showForm && !isMobile ? 'panel-collapsed' : '',
+          isMobile ? `mobile-step-${mobileStep}` : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
       >
-        {panelOpen && (
+        {showForm && (
           <aside className="sidebar">
             <WellForm data={data} onChange={setData} />
           </aside>
         )}
-        <section className="canvas">
-          <div className="canvas-toolbar">
-            <div className="view-tabs" role="tablist">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'well'}
-                className={tab === 'well' ? 'tab active' : 'tab'}
-                onClick={() => setTab('well')}
-              >
-                Esquema do poço
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'column'}
-                className={tab === 'column' ? 'tab active' : 'tab'}
-                onClick={() => setTab('column')}
-              >
-                Detalhe da coluna
-              </button>
+
+        {showScheme && (
+          <section className="canvas">
+            <div className="canvas-toolbar">
+              {isMobile && (
+                <button
+                  type="button"
+                  className="btn-back-params"
+                  onClick={goToParams}
+                >
+                  ← Editar parâmetros
+                </button>
+              )}
+              <div className="view-tabs" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === 'well'}
+                  className={tab === 'well' ? 'tab active' : 'tab'}
+                  onClick={() => setTab('well')}
+                >
+                  Poço
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === 'column'}
+                  className={tab === 'column' ? 'tab active' : 'tab'}
+                  onClick={() => setTab('column')}
+                >
+                  Coluna
+                </button>
+              </div>
+              <span className="hint hint-desktop">
+                {tab === 'well'
+                  ? 'Visão completa · componentes na base do revestimento de produção'
+                  : 'Escala ampliada · trechos da coluna sem sobreposição'}
+                {' · '}
+                <kbd>Ctrl</kbd>+<kbd>S</kbd> salva · PDF com 2 páginas
+              </span>
             </div>
-            <span className="hint">
-              {tab === 'well'
-                ? 'Visão completa · componentes na base do revestimento de produção'
-                : 'Escala ampliada · trechos da coluna sem sobreposição'}
-              {' · '}
-              <kbd>Ctrl</kbd>+<kbd>S</kbd> salva · PDF com 2 páginas coloridas
-            </span>
-          </div>
-          <div className="canvas-scroll">
-            {tab === 'well' ? (
-              <WellSchematic data={data} />
-            ) : (
-              <ColumnDetailSchematic data={data} />
-            )}
-          </div>
-        </section>
+            <div className="canvas-scroll">
+              {tab === 'well' ? (
+                <WellSchematic data={data} />
+              ) : (
+                <ColumnDetailSchematic data={data} />
+              )}
+            </div>
+          </section>
+        )}
       </main>
+
+      {/* CTA mobile: gerar esquema a partir dos parâmetros */}
+      {isMobile && mobileStep === 'params' && (
+        <div className="mobile-cta no-print">
+          <button type="button" className="btn-generate" onClick={goToScheme}>
+            Gerar esquema
+          </button>
+          <p className="mobile-cta-hint">
+            Você poderá voltar e editar os parâmetros a qualquer momento
+          </p>
+        </div>
+      )}
+
+      {/* Ações rápidas no esquema (mobile) */}
+      {isMobile && mobileStep === 'scheme' && (
+        <div className="mobile-cta mobile-cta-scheme no-print">
+          <button type="button" className="btn-ghost-wide" onClick={goToParams}>
+            Editar parâmetros
+          </button>
+          <button
+            type="button"
+            className="btn-generate btn-generate-secondary"
+            onClick={() => void handlePrint()}
+            disabled={printing}
+          >
+            {printing ? 'Preparando…' : 'PDF'}
+          </button>
+        </div>
+      )}
 
       {/* Fonte dos SVGs para rasterizar (fora da tela, com tamanho real) */}
       <div className="print-root" aria-hidden="true">

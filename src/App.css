@@ -39,10 +39,22 @@
   color: #f5f8fb;
 }
 
-.brand p {
+.brand p,
+.brand-sub {
   margin: 0.15rem 0 0;
   font-size: 0.78rem;
   color: #8b9aab;
+}
+
+.header-actions-mobile {
+  display: none;
+}
+
+.mobile-stepper,
+.mobile-cta,
+.mobile-more,
+.btn-back-params {
+  display: none;
 }
 
 .header-actions {
@@ -386,15 +398,291 @@
   background: #4a2a32;
 }
 
-@media (max-width: 960px) {
-  .app-main {
-    grid-template-columns: 1fr;
+/* ——— Mobile: fluxo em 2 etapas (parâmetros → esquema) ——— */
+@media (max-width: 900px) {
+  .app-header {
+    padding: 0.65rem 0.85rem;
+    gap: 0.5rem;
+    position: sticky;
+    top: 0;
   }
 
-  .sidebar {
-    max-height: 42vh;
-    border-right: none;
+  .brand h1 {
+    font-size: 0.95rem;
+  }
+
+  .brand-sub {
+    font-size: 0.72rem !important;
+  }
+
+  .brand-mark {
+    font-size: 1.35rem;
+  }
+
+  .header-actions-desktop {
+    display: none !important;
+  }
+
+  .header-actions-mobile {
+    display: flex !important;
+    gap: 0.4rem;
+  }
+
+  .header-actions-mobile button {
+    font-size: 0.75rem;
+    padding: 0.4rem 0.65rem;
+  }
+
+  .btn-ghost,
+  .btn-more {
+    background: #1e2a38;
+    border: 1px solid #3a4a5c;
+    color: #e7ecf1;
+  }
+
+  .mobile-more {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.55rem 0.85rem 0.75rem;
+    background: #151d27;
     border-bottom: 1px solid #2a3645;
+  }
+
+  .mobile-more button {
+    appearance: none;
+    width: 100%;
+    text-align: left;
+    border: 1px solid #2a3645;
+    background: #1e2a38;
+    color: #e7ecf1;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.7rem 0.85rem;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+
+  .mobile-more button:active {
+    background: #263445;
+  }
+
+  .mobile-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.85rem;
+    background: #121920;
+    border-bottom: 1px solid #2a3645;
+  }
+
+  .mobile-stepper button {
+    appearance: none;
+    border: 1px solid #2a3645;
+    background: #1a2330;
+    color: #8b9aab;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.4rem 0.75rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+  }
+
+  .mobile-stepper button.active {
+    background: #0d7a4f;
+    border-color: #109463;
+    color: #fff;
+  }
+
+  .mobile-stepper .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.2rem;
+    height: 1.2rem;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    font-size: 0.7rem;
+  }
+
+  .mobile-stepper .step-sep {
+    color: #4d6278;
+    font-weight: 700;
+  }
+
+  .app-main {
+    grid-template-columns: 1fr;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* Etapa 1: só formulário */
+  .app-main.mobile-step-params .canvas {
+    display: none !important;
+  }
+
+  .app-main.mobile-step-params .sidebar {
+    display: block;
+    max-height: none;
+    height: auto;
+    border-right: none;
+    border-bottom: none;
+    padding: 0.75rem 0.85rem 6.5rem;
+    overflow: auto;
+  }
+
+  /* Etapa 2: só esquema */
+  .app-main.mobile-step-scheme .sidebar {
+    display: none !important;
+  }
+
+  .app-main.mobile-step-scheme .canvas {
+    display: flex;
+    min-height: 0;
+    height: calc(100dvh - 160px);
+  }
+
+  .app-main.mobile-step-scheme .canvas-scroll {
+    padding: 0.65rem 0.65rem 5.5rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app-main.mobile-step-scheme .schematic-wrap {
+    width: 100%;
+    min-width: 640px; /* permite pinch/scroll horizontal no SVG */
+    border-radius: 10px;
+  }
+
+  .canvas-toolbar {
+    padding: 0.45rem 0.65rem;
+    gap: 0.45rem;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #0c1015;
+  }
+
+  .btn-back-params {
+    display: inline-flex !important;
+    appearance: none;
+    border: 1px solid #3a4a5c;
+    background: #1e2a38;
+    color: #e7ecf1;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.4rem 0.65rem;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .hint-desktop {
+    display: none;
+  }
+
+  .view-tabs .tab {
+    padding: 0.45rem 0.9rem;
+    font-size: 0.8rem;
+  }
+
+  .mobile-cta {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    padding: 0.75rem 0.85rem calc(0.75rem + env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, transparent 0%, #0f1419 28%, #0f1419 100%);
+    border-top: 1px solid #2a3645;
+  }
+
+  .mobile-cta-scheme {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+
+  .btn-generate {
+    appearance: none;
+    width: 100%;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #129a64 0%, #0d7a4f 100%);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 800;
+    padding: 0.95rem 1rem;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(13, 122, 79, 0.35);
+  }
+
+  .btn-generate:active {
+    transform: scale(0.99);
+  }
+
+  .btn-generate-secondary {
+    width: auto;
+    flex: 0 0 38%;
+    font-size: 0.92rem;
+    padding: 0.85rem 0.5rem;
+  }
+
+  .btn-ghost-wide {
+    appearance: none;
+    flex: 1;
+    border: 1px solid #3a4a5c;
+    border-radius: 12px;
+    background: #1e2a38;
+    color: #e7ecf1;
+    font-size: 0.9rem;
+    font-weight: 700;
+    padding: 0.85rem 0.75rem;
+    cursor: pointer;
+  }
+
+  .mobile-cta-hint {
+    margin: 0.45rem 0 0;
+    text-align: center;
+    font-size: 0.72rem;
+    color: #8b9aab;
+  }
+
+  .save-toast {
+    top: auto;
+    bottom: 5.5rem;
+    right: 12px;
+    left: 12px;
+    text-align: center;
+  }
+
+  /* Form touch-friendly */
+  .well-form input,
+  .well-form select {
+    font-size: 16px; /* evita zoom iOS */
+    padding: 0.55rem 0.6rem;
+  }
+
+  .form-section {
+    padding: 0.9rem;
+  }
+
+  .row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Desktop: esconde UI mobile */
+@media (min-width: 901px) {
+  .header-actions-mobile,
+  .mobile-stepper,
+  .mobile-cta,
+  .mobile-more,
+  .btn-back-params {
+    display: none !important;
   }
 }
 
