@@ -211,7 +211,15 @@ export function CloudPanel({
           </div>
         ) : !user ? (
           <div className="library-auth">
-            <div className="library-auth-card">
+            <form
+              className="library-auth-card"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!busy && email && password.length >= 6) {
+                  void handleAuth();
+                }
+              }}
+            >
               <h3>Acesse sua conta</h3>
               <p>Entre para ver e salvar esquemas no servidor.</p>
               <div className="cloud-auth-tabs">
@@ -251,10 +259,9 @@ export function CloudPanel({
                 />
               </label>
               <button
-                type="button"
+                type="submit"
                 className="library-primary"
                 disabled={busy || !email || password.length < 6}
-                onClick={() => void handleAuth()}
               >
                 {busy
                   ? 'Aguarde…'
@@ -262,7 +269,7 @@ export function CloudPanel({
                     ? 'Entrar'
                     : 'Criar conta'}
               </button>
-            </div>
+            </form>
           </div>
         ) : (
           <>
