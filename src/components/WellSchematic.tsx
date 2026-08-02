@@ -334,7 +334,15 @@ export function WellSchematic({ data }: Props) {
     ? diameterWidth(sortedCasings[0].diameter, 124)
     : 90;
   const prodCasing = sortedCasings[sortedCasings.length - 1];
-  const prodW = prodCasing ? diameterWidth(prodCasing.diameter, 72) : 42;
+  const prodIdx = Math.max(0, sortedCasings.length - 1);
+  // Mesma fórmula do desenho dos revestimentos (não usar base 72)
+  const prodW = prodCasing
+    ? diameterWidth(prodCasing.diameter, 124 - prodIdx * 14)
+    : 42;
+  const prodInnerOpen = Math.max(20, prodW * 0.42);
+  const prodWall = Math.max(5, (prodW - prodInnerOpen) / 2);
+  /** Metade do furo interno do RV de produção (parede a parede) */
+  const prodBoreHalf = prodW / 2 - prodWall;
   const tubingW = Math.max(12, prodW * 0.32);
 
   const formationLeft = wellCenterX - outerW / 2 - 42;
@@ -684,8 +692,8 @@ export function WellSchematic({ data }: Props) {
         })}
 
         {/*
-          Tampão: fecha o interior do revestimento de produção na MD real
-          (topo → base), não flutuando fora do poço.
+          Tampão: igual ao detalhe da coluna — veda o furo do RV de produção
+          de parede a parede (face interna), na MD topo → base.
         */}
         {tampaoOn &&
           Number.isFinite(tampaoBot) &&
@@ -696,21 +704,21 @@ export function WellSchematic({ data }: Props) {
             let yT = toY(topMd);
             let yB = toY(tampaoBot);
             if (yB < yT) [yT, yB] = [yB, yT];
-            // Intervalo fino (ex. 0,5 m) ainda precisa ser visível
-            const minH = 16;
+            // Intervalo fino ainda legível (mesmo “bloco” da aba detalhe)
+            const minH = 28;
             if (yB - yT < minH) {
               const mid = (yT + yB) / 2;
               yT = mid - minH / 2;
               yB = mid + minH / 2;
             }
-            // Face interna do revestimento de produção
-            const innerHalf = Math.max(prodW / 2 - 5, tubingW / 2 + 4);
-            const x0 = wellCenterX - innerHalf;
-            const w = innerHalf * 2;
+            // Parede a parede do furo do revestimento de produção
+            const boreHalf = prodBoreHalf;
+            const x0 = wellCenterX - boreHalf;
+            const w = boreHalf * 2;
             const h = yB - yT;
             return (
               <g key="g-tampao">
-                {/* Corpo sólido preenchendo o furo do RV */}
+                {/* Vedação total do furo (encosta nas paredes internas do RV) */}
                 <rect
                   x={x0}
                   y={yT}
@@ -719,41 +727,45 @@ export function WellSchematic({ data }: Props) {
                   rx={2}
                   fill="#1e293b"
                   stroke="#0f172a"
-                  strokeWidth={1.2}
+                  strokeWidth={1.15}
                 />
                 <rect
                   x={x0 + 3}
-                  y={yT + 2}
+                  y={yT + 3}
                   width={w - 6}
-                  height={Math.max(4, h - 4)}
-                  rx={1}
-                  fill="#334155"
+                  height={Math.max(6, h - 6)}
+                  rx={2}
+                  fill="#475569"
                 />
-                {/* Hachura de fechamento */}
+                {/* Hachura de fechamento (igual detalhe) */}
                 {Array.from({
-                  length: Math.max(2, Math.floor(h / 4)),
+                  length: Math.max(3, Math.floor(h / 5)),
                 }).map((_, i) => (
                   <line
                     key={i}
-                    x1={x0 + 4}
-                    y1={yT + 3 + i * 4}
-                    x2={x0 + w - 4}
-                    y2={yT + 3 + i * 4}
+                    x1={x0 + 5}
+                    y1={yT + 5 + i * 5}
+                    x2={x0 + w - 5}
+                    y2={yT + 5 + i * 5}
                     stroke="#94a3b8"
-                    strokeWidth={0.8}
-                    opacity={0.55}
+                    strokeWidth={0.85}
+                    opacity={0.7}
                   />
                 ))}
-                {/* Base / flange encostando no fundo do plug */}
+                {/* Lábios de vedação no topo e na base — encostam na parede do RV */}
                 <rect
-                  x={x0 - 2}
-                  y={yB - 4}
-                  width={w + 4}
-                  height={5}
-                  rx={1}
+                  x={x0}
+                  y={yT}
+                  width={w}
+                  height={4}
                   fill="#0f172a"
-                  stroke="#000"
-                  strokeWidth={0.6}
+                />
+                <rect
+                  x={x0}
+                  y={yB - 4}
+                  width={w}
+                  height={4}
+                  fill="#0f172a"
                 />
               </g>
             );
@@ -877,19 +889,17 @@ export function WellSchematic({ data }: Props) {
           } else if (
             item.kind === 'fundo' ||
             item.kind === 'sapata' ||
-            item.kind === 'extrem' ||
-            item.kind === 'tampao'
+            item.kind === 'extrem'
           ) {
             attachX = wellCenterX + prodW / 2 + 2;
+          } else if (item.kind === 'tampao') {
+            attachX = wellCenterX + prodBoreHalf;
+            attachY = toY(item.depth);
           } else if (item.kind === 'wh') {
             attachX = wellCenterX + outerW * 0.4;
           } else if (item.kind === 'comp') {
             // Tag do tubo aponta para a coluna central (não para um “niple”)
             attachX = wellCenterX + tubingW / 2 + 2;
-          }
-
-          if (item.kind === 'tampao') {
-            attachY = toY(item.depth);
           }
 
           const accent =
