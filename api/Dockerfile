@@ -1,11 +1,12 @@
+# Build context = raiz do repositório (padrão no EasyPanel)
 FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
+COPY api/package.json api/package-lock.json* ./
 RUN npm install --omit=dev
 
-COPY src ./src
+COPY api/src ./src
 
 ENV NODE_ENV=production
 ENV PORT=3000
