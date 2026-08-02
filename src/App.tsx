@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { WellForm } from './components/WellForm';
 import { WellSchematic } from './components/WellSchematic';
 import { ColumnDetailSchematic } from './components/ColumnDetailSchematic';
@@ -28,6 +28,7 @@ function App() {
   const [tab, setTab] = useState<ViewTab>('well');
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
+  const openFileRef = useRef<HTMLInputElement>(null);
 
   const flashSave = useCallback((msg: string) => {
     setSaveMsg(msg);
@@ -81,25 +82,72 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
-  const handleImportJson = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
+  const importProjectJson = useCallback(
+    async (source: File | string, sourceName?: string) => {
       try {
-        const parsed = JSON.parse(String(reader.result));
+        const text =
+          typeof source === 'string' ? source : await source.text();
+        const parsed = JSON.parse(text) as unknown;
         const norm = normalizeWellData(parsed);
-        if (norm) {
-          setData(norm);
-          saveProjectLocal(norm);
-          flashSave('Projeto aberto · use Salvar projeto para gravar no disco');
-        } else {
-          alert('JSON inválido: faltam campos obrigatórios.');
+        if (!norm) {
+          alert(
+            'JSON inválido: esperado um projeto de poço (com revestimentos/casings).'
+          );
+          return;
         }
+        setData(norm);
+        saveProjectLocal(norm);
+        const name =
+          sourceName ||
+          (typeof source !== 'string' ? source.name : '') ||
+          norm.wellName;
+        flashSave(`Projeto importado: ${name}`);
       } catch {
-        alert('Não foi possível ler o arquivo JSON.');
+        alert('Não foi possível importar o JSON. Verifique o arquivo.');
       }
+    },
+    [flashSave]
+  );
+
+  /** Abre seletor de arquivo .json e importa o projeto */
+  const handleOpenProject = useCallback(async () => {
+    const w = window as Window & {
+      showOpenFilePicker?: (options?: {
+        multiple?: boolean;
+        types?: Array<{
+          description?: string;
+          accept: Record<string, string[]>;
+        }>;
+      }) => Promise<FileSystemFileHandle[]>;
     };
-    reader.readAsText(file);
-  };
+
+    // Chrome/Edge: diálogo nativo “Abrir”
+    if (typeof w.showOpenFilePicker === 'function') {
+      try {
+        const [handle] = await w.showOpenFilePicker({
+          multiple: false,
+          types: [
+            {
+              description: 'Projeto JSON',
+              accept: {
+                'application/json': ['.json'],
+                'text/json': ['.json'],
+              },
+            },
+          ],
+        });
+        const file = await handle.getFile();
+        await importProjectJson(file, file.name);
+        return;
+      } catch (err) {
+        const name = err instanceof DOMException ? err.name : '';
+        if (name === 'AbortError') return;
+        // fallback para <input type="file">
+      }
+    }
+
+    openFileRef.current?.click();
+  }, [importProjectJson]);
 
   /**
    * Impressão na MESMA página: rasteriza os SVGs em PNG (cores iguais à tela)
@@ -232,26 +280,28 @@ function App() {
             type="button"
             className="btn-primary"
             onClick={() => void handleSaveToDisk()}
-            title="Salva um arquivo .json no disco (pode reabrir depois)"
+            title="Salva um arquivo .json no disco"
           >
             Salvar projeto
           </button>
-          <label
-            className="btn-file"
-            title="Abre um arquivo .json de projeto salvo no disco"
+          <button
+            type="button"
+            onClick={() => void handleOpenProject()}
+            title="Importa um arquivo .json de projeto salvo"
           >
-            Abrir projeto
-            <input
-              type="file"
-              accept="application/json,.json"
-              hidden
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleImportJson(f);
-                e.target.value = '';
-              }}
-            />
-          </label>
+            Abrir / Importar JSON
+          </button>
+          <input
+            ref={openFileRef}
+            type="file"
+            accept="application/json,.json,text/json,.txt"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void importProjectJson(f, f.name);
+              e.target.value = '';
+            }}
+          />
           <button
             type="button"
             className="btn-primary"

@@ -154,7 +154,7 @@ export function WellSchematic({ data }: Props) {
 
   type RightItem = {
     id: string;
-    kind: 'comp' | 'perf' | 'fundo' | 'sapata' | 'wh' | 'extrem';
+    kind: 'comp' | 'perf' | 'fundo' | 'sapata' | 'wh' | 'extrem' | 'tampao';
     depth: number;
     title: string;
     subtitle?: string;
@@ -235,22 +235,19 @@ export function WellSchematic({ data }: Props) {
     tone: 'extrem',
   });
 
-  // Tampão opcional — depois da coluna (não é componente de coluna)
+  // Tampão opcional — na escala real do poço, fecha o RV de produção
   const tampaoOn = Boolean(data.tampao?.enabled);
   const tampaoTop = num(data.tampao?.depthTop, NaN);
   const tampaoBot = num(data.tampao?.depthBottom, NaN);
   if (tampaoOn && Number.isFinite(tampaoBot)) {
-    const tampaoY =
-      (compStackYs.length
-        ? Math.max(...compStackYs)
-        : stackAnchorY - COMP_SLOT) + COMP_SLOT;
+    const mid = Number.isFinite(tampaoTop)
+      ? (tampaoTop + tampaoBot) / 2
+      : tampaoBot;
     rightItems.push({
       id: 'tampao',
-      kind: 'comp',
-      depth: Number.isFinite(tampaoTop)
-        ? (tampaoTop + tampaoBot) / 2
-        : tampaoBot,
-      fixedY: tampaoY,
+      kind: 'tampao',
+      depth: mid,
+      // sem fixedY: posiciona pela profundidade real (embaixo do poço)
       title: data.tampao?.label || 'Tampão',
       subtitle: Number.isFinite(tampaoTop)
         ? `Topo ${fmt(tampaoTop)} → Base ${fmt(tampaoBot)} m`
@@ -686,25 +683,79 @@ export function WellSchematic({ data }: Props) {
           );
         })}
 
-        {/* Tampão opcional (após a coluna) — fecha o RV de produção */}
+        {/*
+          Tampão: fecha o interior do revestimento de produção na MD real
+          (topo → base), não flutuando fora do poço.
+        */}
         {tampaoOn &&
           Number.isFinite(tampaoBot) &&
           (() => {
-            const ri = rightItems.findIndex((r) => r.id === 'tampao');
-            const y =
-              ri >= 0 ? rightYs[ri] : stackAnchorY + COMP_SLOT;
-            const plugH = COMP_SLOT * 0.85;
+            const topMd = Number.isFinite(tampaoTop)
+              ? tampaoTop
+              : tampaoBot - 0.5;
+            let yT = toY(topMd);
+            let yB = toY(tampaoBot);
+            if (yB < yT) [yT, yB] = [yB, yT];
+            // Intervalo fino (ex. 0,5 m) ainda precisa ser visível
+            const minH = 16;
+            if (yB - yT < minH) {
+              const mid = (yT + yB) / 2;
+              yT = mid - minH / 2;
+              yB = mid + minH / 2;
+            }
+            // Face interna do revestimento de produção
+            const innerHalf = Math.max(prodW / 2 - 5, tubingW / 2 + 4);
+            const x0 = wellCenterX - innerHalf;
+            const w = innerHalf * 2;
+            const h = yB - yT;
             return (
-              <ComponentGlyph
-                key="g-tampao"
-                kind="plug"
-                cx={wellCenterX}
-                y={y}
-                tubingW={tubingW}
-                casingInnerW={prodW - 10}
-                yTop={y - plugH / 2}
-                yBot={y + plugH / 2}
-              />
+              <g key="g-tampao">
+                {/* Corpo sólido preenchendo o furo do RV */}
+                <rect
+                  x={x0}
+                  y={yT}
+                  width={w}
+                  height={h}
+                  rx={2}
+                  fill="#1e293b"
+                  stroke="#0f172a"
+                  strokeWidth={1.2}
+                />
+                <rect
+                  x={x0 + 3}
+                  y={yT + 2}
+                  width={w - 6}
+                  height={Math.max(4, h - 4)}
+                  rx={1}
+                  fill="#334155"
+                />
+                {/* Hachura de fechamento */}
+                {Array.from({
+                  length: Math.max(2, Math.floor(h / 4)),
+                }).map((_, i) => (
+                  <line
+                    key={i}
+                    x1={x0 + 4}
+                    y1={yT + 3 + i * 4}
+                    x2={x0 + w - 4}
+                    y2={yT + 3 + i * 4}
+                    stroke="#94a3b8"
+                    strokeWidth={0.8}
+                    opacity={0.55}
+                  />
+                ))}
+                {/* Base / flange encostando no fundo do plug */}
+                <rect
+                  x={x0 - 2}
+                  y={yB - 4}
+                  width={w + 4}
+                  height={5}
+                  rx={1}
+                  fill="#0f172a"
+                  stroke="#000"
+                  strokeWidth={0.6}
+                />
+              </g>
             );
           })()}
 
@@ -826,14 +877,19 @@ export function WellSchematic({ data }: Props) {
           } else if (
             item.kind === 'fundo' ||
             item.kind === 'sapata' ||
-            item.kind === 'extrem'
+            item.kind === 'extrem' ||
+            item.kind === 'tampao'
           ) {
-            attachX = wellCenterX + prodW / 2 + 4;
+            attachX = wellCenterX + prodW / 2 + 2;
           } else if (item.kind === 'wh') {
             attachX = wellCenterX + outerW * 0.4;
           } else if (item.kind === 'comp') {
             // Tag do tubo aponta para a coluna central (não para um “niple”)
             attachX = wellCenterX + tubingW / 2 + 2;
+          }
+
+          if (item.kind === 'tampao') {
+            attachY = toY(item.depth);
           }
 
           const accent =
