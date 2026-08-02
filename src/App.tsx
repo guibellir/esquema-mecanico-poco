@@ -11,6 +11,12 @@ import {
   saveProjectLocal,
   saveProjectToDisk,
 } from './utils/storage';
+import {
+  createProject,
+  getToken,
+  isCloudConfigured,
+  updateProject,
+} from './utils/cloudApi';
 import { svgElementToPngDataUrl } from './utils/svgToPng';
 import './App.css';
 
@@ -39,6 +45,8 @@ function App() {
   const [mobileStep, setMobileStep] = useState<MobileStep>('params');
   const [moreOpen, setMoreOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [cloudProjectId, setCloudProjectId] = useState<string | null>(null);
+  const [cloudSaving, setCloudSaving] = useState(false);
   const openFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -68,20 +76,50 @@ function App() {
     if (result.method === 'picker') {
       flashSave(`Salvo no disco: ${result.name}`);
     } else {
-      flashSave(`Arquivo baixado: ${result.name} (use Abrir projeto para reabrir)`);
+      flashSave(`Arquivo baixado: ${result.name}`);
     }
   }, [data, flashSave]);
+
+  const handleSaveToCloud = useCallback(async () => {
+    if (!isCloudConfigured()) {
+      flashSave('API da nuvem não configurada');
+      return;
+    }
+    if (!getToken()) {
+      setLibraryOpen(true);
+      flashSave('Faça login para salvar na nuvem');
+      return;
+    }
+    setCloudSaving(true);
+    try {
+      const name = data.wellName?.trim() || 'Projeto sem nome';
+      if (cloudProjectId) {
+        await updateProject(cloudProjectId, name, data);
+        flashSave('Projeto atualizado na nuvem');
+      } else {
+        const p = await createProject(name, data);
+        setCloudProjectId(p.id);
+        flashSave('Projeto salvo na nuvem');
+      }
+    } catch (e) {
+      flashSave(e instanceof Error ? e.message : 'Erro ao salvar na nuvem');
+    } finally {
+      setCloudSaving(false);
+    }
+  }, [cloudProjectId, data, flashSave]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        void handleSaveToDisk();
+        // Preferência: nuvem se logado; senão JSON no disco
+        if (getToken() && isCloudConfigured()) void handleSaveToCloud();
+        else void handleSaveToDisk();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleSaveToDisk]);
+  }, [handleSaveToCloud, handleSaveToDisk]);
 
   const handleExportSvg = () => {
     const sel =
@@ -323,16 +361,25 @@ function App() {
           <button
             type="button"
             className="btn-primary"
+            onClick={() => void handleSaveToCloud()}
+            disabled={cloudSaving}
+            title="Salva o poço atual no servidor (VPS)"
+          >
+            {cloudSaving
+              ? 'Salvando…'
+              : cloudProjectId
+                ? 'Atualizar na nuvem'
+                : 'Salvar na nuvem'}
+          </button>
+          <button
+            type="button"
             onClick={() => setLibraryOpen(true)}
             title="Biblioteca de esquemas na nuvem"
           >
-            Projetos na nuvem
+            Projetos
           </button>
           <button type="button" onClick={() => setPanelOpen((v) => !v)}>
             {panelOpen ? 'Ocultar painel' : 'Mostrar painel'}
-          </button>
-          <button type="button" onClick={() => setData(defaultWell)}>
-            Exemplo CAU-07
           </button>
           <button
             type="button"
@@ -375,12 +422,22 @@ function App() {
           <button
             type="button"
             className="btn-primary"
+            disabled={cloudSaving}
+            onClick={() => {
+              setMoreOpen(false);
+              void handleSaveToCloud();
+            }}
+          >
+            {cloudSaving ? '…' : 'Salvar'}
+          </button>
+          <button
+            type="button"
             onClick={() => {
               setMoreOpen(false);
               setLibraryOpen(true);
             }}
           >
-            Nuvem
+            Projetos
           </button>
           <button
             type="button"
@@ -398,11 +455,11 @@ function App() {
           <button
             type="button"
             onClick={() => {
-              setData(defaultWell);
               setMoreOpen(false);
+              void handleSaveToCloud();
             }}
           >
-            Exemplo CAU-07
+            Salvar na nuvem
           </button>
           <button
             type="button"
@@ -411,7 +468,7 @@ function App() {
               setLibraryOpen(true);
             }}
           >
-            Projetos na nuvem
+            Biblioteca de projetos
           </button>
           <button
             type="button"
@@ -596,6 +653,8 @@ function App() {
         open={libraryOpen}
         onClose={() => setLibraryOpen(false)}
         data={data}
+        currentId={cloudProjectId}
+        onCurrentIdChange={setCloudProjectId}
         onLoadProject={(well) => {
           setData(well);
           saveProjectLocal(well);

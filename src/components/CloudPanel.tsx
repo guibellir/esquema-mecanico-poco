@@ -21,6 +21,9 @@ type Props = {
   data: WellData;
   onLoadProject: (data: WellData) => void;
   onMessage: (msg: string) => void;
+  /** Projeto atualmente em edição na nuvem (controlado pelo App) */
+  currentId: string | null;
+  onCurrentIdChange: (id: string | null) => void;
 };
 
 export function CloudPanel({
@@ -29,6 +32,8 @@ export function CloudPanel({
   data,
   onLoadProject,
   onMessage,
+  currentId,
+  onCurrentIdChange,
 }: Props) {
   const configured = isCloudConfigured();
   const [user, setUser] = useState<CloudUser | null>(null);
@@ -37,7 +42,6 @@ export function CloudPanel({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [projects, setProjects] = useState<CloudProjectSummary[]>([]);
-  const [currentId, setCurrentId] = useState<string | null>(null);
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [query, setQuery] = useState('');
 
@@ -54,7 +58,7 @@ export function CloudPanel({
         setProjects(await listProjects());
       } else {
         setProjects([]);
-        setCurrentId(null);
+        onCurrentIdChange(null);
       }
     } catch (e) {
       onMessage(e instanceof Error ? e.message : 'Erro na nuvem');
@@ -117,7 +121,7 @@ export function CloudPanel({
         onMessage('Projeto atualizado na nuvem');
       } else {
         const p = await createProject(name, data);
-        setCurrentId(p.id);
+        onCurrentIdChange(p.id);
         onMessage('Projeto salvo na nuvem');
       }
       setProjects(await listProjects());
@@ -134,7 +138,7 @@ export function CloudPanel({
     try {
       const name = `${data.wellName?.trim() || 'Projeto'} (cópia)`;
       const p = await createProject(name, data);
-      setCurrentId(p.id);
+      onCurrentIdChange(p.id);
       setProjects(await listProjects());
       onMessage('Cópia salva na nuvem');
     } catch (e) {
@@ -149,7 +153,7 @@ export function CloudPanel({
     try {
       const p = await getProject(id);
       onLoadProject(p.data);
-      setCurrentId(p.id);
+      onCurrentIdChange(p.id);
       onMessage(`Aberto: ${p.name}`);
       onClose();
     } catch (e) {
@@ -164,7 +168,7 @@ export function CloudPanel({
     setBusy(true);
     try {
       await deleteProject(id);
-      if (currentId === id) setCurrentId(null);
+      if (currentId === id) onCurrentIdChange(null);
       setProjects(await listProjects());
       onMessage('Projeto apagado da nuvem');
     } catch (e) {
@@ -322,7 +326,7 @@ export function CloudPanel({
                     logout();
                     setUser(null);
                     setProjects([]);
-                    setCurrentId(null);
+                    onCurrentIdChange(null);
                     onMessage('Saiu da conta');
                   }}
                 >
