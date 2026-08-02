@@ -138,13 +138,19 @@ export function WellSchematic({ data }: Props) {
 
   const W = 1040;
   const headerH = 88;
-  const topY = headerH + 56;
+  // Faixa de meta (Elev. MR/BAP/Fundo) — não cruza a cabeça de produção
+  const metaBandH = 52;
+  // Espaço da árvore/cabeça acima do MD=0
+  const wellheadBandH = 62;
+  const topY = headerH + metaBandH + wellheadBandH;
   const wellCenterX = 430;
+  const wellheadY = topY; // base da cabeça no topo do poço (MD 0)
+  const wellheadTopY = headerH + metaBandH + 6; // começa abaixo dos pills
 
   // Card metrics (must match InfoCard)
   const CARD_H = 40;
   const CARD_GAP = 48; // center-to-center — no overlap
-  const LABEL_TOP = topY - 20;
+  const LABEL_TOP = wellheadTopY + 8; // labels da cabeça ao lado da árvore
   const FOOTER_H = 64;
 
   // Well drawing height (fixed). Labels may extend BELOW this; SVG grows.
@@ -450,9 +456,9 @@ export function WellSchematic({ data }: Props) {
           <clipPath id="wellClip">
             <rect
               x={formationLeft}
-              y={topY - 12}
+              y={topY - 4}
               width={formationW}
-              height={bottomY - topY + 24}
+              height={bottomY - topY + 16}
               rx="16"
             />
           </clipPath>
@@ -504,24 +510,28 @@ export function WellSchematic({ data }: Props) {
           anchor="end"
         />
 
-        {/* Elevation pills under header */}
-        <g transform={`translate(36, ${headerH + 16})`}>
+        {/* Meta pills — faixa própria à esquerda, sem cruzar a cabeça */}
+        <g transform={`translate(36, ${headerH + 14})`}>
           <MetaPill label="Elev. MR" value={`${fmt(data.elevacaoMR)} m`} />
-          <g transform="translate(148, 0)">
+          <g transform="translate(150, 0)">
             <MetaPill label="Elev. BAP" value={`${fmt(data.elevacaoBAP)} m`} />
           </g>
-          <g transform="translate(296, 0)">
-            <MetaPill label="Fundo" value={`${fmt(data.fundoEncontrado)} m`} />
-          </g>
+        </g>
+        <g transform={`translate(36, ${headerH + 46})`}>
+          <MetaPill
+            label="Fundo"
+            value={`${fmt(data.fundoEncontrado)} m`}
+            width={286}
+          />
         </g>
 
-        {/* Formation bed */}
+        {/* Formation bed — começa no MD 0 (abaixo da cabeça) */}
         <g filter="url(#wellShadow)">
           <rect
             x={formationLeft}
-            y={topY - 12}
+            y={topY - 4}
             width={formationW}
-            height={bottomY - topY + 24}
+            height={bottomY - topY + 16}
             rx="16"
             fill="url(#formationGrad)"
             stroke="#f59e0b"
@@ -636,7 +646,8 @@ export function WellSchematic({ data }: Props) {
           Desenhada antes da wellhead para “entrar” nela.
         */}
         {(() => {
-          const tubingTopY = topY - 48; // entra no corpo da cabeça de produção
+          // Coluna sobe só até a faixa da cabeça (não invade os pills)
+          const tubingTopY = wellheadTopY + 6;
           const tubingBotY = toY(tubingBottomDepth);
           const h = Math.max(12, tubingBotY - tubingTopY);
           return (
@@ -664,12 +675,13 @@ export function WellSchematic({ data }: Props) {
           );
         })()}
 
-        {/* Cabeça de produção (por cima da coluna, com furo central) */}
+        {/* Cabeça de produção — ancorada no topo do poço, abaixo dos pills */}
         <Wellhead
           x={wellCenterX}
-          y={topY}
+          y={wellheadY}
           width={outerW * 0.78}
           tubingW={tubingW}
+          topLimit={wellheadTopY}
         />
 
         {/*
@@ -879,7 +891,7 @@ export function WellSchematic({ data }: Props) {
           let attachX = wellCenterX + tubingW / 2 + 2;
           let attachY =
             item.kind === 'wh'
-              ? topY - 6
+              ? wellheadTopY + 20
               : item.kind === 'comp'
                 ? y
                 : toY(item.depth);
@@ -1068,11 +1080,19 @@ function HeaderChip({
   );
 }
 
-function MetaPill({ label, value }: { label: string; value: string }) {
+function MetaPill({
+  label,
+  value,
+  width = 136,
+}: {
+  label: string;
+  value: string;
+  width?: number;
+}) {
   return (
     <g>
       <rect
-        width={136}
+        width={width}
         height={28}
         rx={14}
         fill="#fff"
@@ -1082,7 +1102,14 @@ function MetaPill({ label, value }: { label: string; value: string }) {
       <text x={12} y={18} fontFamily={FONT} fontSize="10" fontWeight="600" fill={C.inkMuted}>
         {label}
       </text>
-      <text x={70} y={18} fontFamily={FONT} fontSize="11" fontWeight="700" fill={C.ink}>
+      <text
+        x={Math.min(78, width * 0.48)}
+        y={18}
+        fontFamily={FONT}
+        fontSize="11"
+        fontWeight="700"
+        fill={C.ink}
+      >
         {value}
       </text>
     </g>
@@ -1199,33 +1226,34 @@ function Wellhead({
   y,
   width,
   tubingW = 14,
+  topLimit,
 }: {
   x: number;
   y: number;
   width: number;
   tubingW?: number;
+  /** Não desenhar acima deste Y (evita sobrepor pills/meta) */
+  topLimit?: number;
 }) {
   const w = Math.max(56, width);
   const tw = Math.max(10, tubingW);
+  const top = topLimit ?? y - 54;
+  const span = Math.max(48, y - top);
+  // Posições proporcionais dentro de [top, y]
+  const yValve = top;
+  const yFlange = top + span * 0.28;
+  const ySpool = top + span * 0.48;
+  const yLower = top + span * 0.72;
+  const yHangar = y - 8;
+
   return (
     <g>
-      {/* Master valve / topo da árvore — coluna passa no centro */}
-      <rect
-        x={x - w * 0.22}
-        y={y - 52}
-        width={w * 0.44}
-        height={18}
-        rx={3}
-        fill="url(#whMetal)"
-        stroke="#334155"
-        strokeWidth={1}
-      />
-      {/* Continuação do tubo dentro da cabeça (conexão visual) */}
+      {/* Tubo dentro da cabeça */}
       <rect
         x={x - tw / 2}
-        y={y - 54}
+        y={top}
         width={tw}
-        height={58}
+        height={y - top}
         fill="url(#tubingMetal)"
         stroke="#1e293b"
         strokeWidth={0.85}
@@ -1233,73 +1261,59 @@ function Wellhead({
       />
       <rect
         x={x - tw / 2 + 2}
-        y={y - 54}
+        y={top}
         width={Math.max(2, tw * 0.22)}
-        height={58}
+        height={y - top}
         fill="#fff"
         opacity={0.28}
         rx={1}
       />
+      {/* Master valve / topo da árvore */}
+      <rect
+        x={x - w * 0.22}
+        y={yValve}
+        width={w * 0.44}
+        height={14}
+        rx={3}
+        fill="url(#whMetal)"
+        stroke="#334155"
+        strokeWidth={1}
+      />
       {/* Top flange */}
       <rect
         x={x - w / 2 - 10}
-        y={y - 36}
+        y={yFlange}
         width={w + 20}
-        height={12}
+        height={11}
         rx={3}
         fill="url(#pipeMetal)"
         stroke="#334155"
         strokeWidth={1}
       />
-      {/* Bolts */}
       {[-0.78, -0.45, -0.15, 0.15, 0.45, 0.78].map((f, i) => (
         <circle
           key={i}
           cx={x + f * (w / 2 + 6)}
-          cy={y - 30}
-          r={2.2}
+          cy={yFlange + 5.5}
+          r={2}
           fill="#1e293b"
           opacity={0.75}
         />
       ))}
-      {/* Spool / tubing head */}
+      {/* Spool */}
       <rect
         x={x - w / 2}
-        y={y - 24}
+        y={ySpool}
         width={w}
-        height={16}
+        height={14}
         rx={2}
         fill="url(#pipeMetal)"
         stroke="#334155"
         strokeWidth={1}
       />
-      {/* Bore do spool (mostra tubo passando) */}
-      <rect
-        x={x - tw / 2 - 1}
-        y={y - 22}
-        width={tw + 2}
-        height={12}
-        rx={1}
-        fill="none"
-        stroke="#1e293b"
-        strokeWidth={0.7}
-        opacity={0.35}
-      />
-      {/* Lower flange / adapter */}
-      <rect
-        x={x - w / 2 + 6}
-        y={y - 10}
-        width={w - 12}
-        height={12}
-        rx={2}
-        fill="url(#whMetal)"
-        stroke="#334155"
-        strokeWidth={1}
-      />
-      {/* Side outlet */}
       <rect
         x={x + w / 2 - 4}
-        y={y - 22}
+        y={ySpool + 3}
         width={14}
         height={8}
         rx={2}
@@ -1307,10 +1321,21 @@ function Wellhead({
         stroke="#334155"
         strokeWidth={0.8}
       />
-      {/* Hangar / encaixe do tubo na cabeça */}
+      {/* Lower flange */}
+      <rect
+        x={x - w / 2 + 6}
+        y={yLower}
+        width={w - 12}
+        height={11}
+        rx={2}
+        fill="url(#whMetal)"
+        stroke="#334155"
+        strokeWidth={1}
+      />
+      {/* Hangar */}
       <rect
         x={x - tw / 2 - 4}
-        y={y - 8}
+        y={yHangar}
         width={tw + 8}
         height={6}
         rx={1}
