@@ -57,56 +57,6 @@ function diameterWidth(diameter: string, maxW = 118): number {
   return Math.max(32, Math.min(maxW, (inches / 20) * maxW));
 }
 
-/**
- * Place labels near desired Y without overlap.
- * Only pushes DOWN — never compresses. Canvas height must grow to fit.
- * Items must already be sorted by desired y (ascending).
- */
-function packLabelsDown(
-  desiredYs: number[],
-  minGap: number,
-  minY: number
-): number[] {
-  if (!desiredYs.length) return [];
-  const ys = desiredYs.map((y) => Math.max(y, minY));
-  for (let i = 1; i < ys.length; i++) {
-    ys[i] = Math.max(ys[i], ys[i - 1] + minGap);
-  }
-  return ys;
-}
-
-/**
- * Same as packLabelsDown but also clamps into [minY, maxY] by
- * spreading evenly when the range is too short (for left column only).
- */
-function deconflict(
-  desiredYs: number[],
-  minGap: number,
-  minY: number,
-  maxY: number
-): number[] {
-  const n = desiredYs.length;
-  if (!n) return [];
-  const needed = (n - 1) * minGap;
-  const span = maxY - minY;
-  if (needed > span) {
-    return desiredYs.map((_, i) => minY + (n === 1 ? 0 : (i * span) / (n - 1)));
-  }
-  const ys = packLabelsDown(desiredYs, minGap, minY);
-  if (ys[n - 1] <= maxY) return ys;
-  // Pull up as a block, then re-enforce gaps from top
-  const overflow = ys[n - 1] - maxY;
-  for (let i = 0; i < n; i++) ys[i] -= overflow;
-  if (ys[0] < minY) {
-    const shift = minY - ys[0];
-    for (let i = 0; i < n; i++) ys[i] += shift;
-  }
-  for (let i = 1; i < n; i++) {
-    ys[i] = Math.max(ys[i], ys[i - 1] + minGap);
-  }
-  return ys;
-}
-
 function casingPrimary(c: WellData['casings'][0]): string {
   return `${c.diameter} · ${fmt(c.depthBottom)} m`;
 }
@@ -136,37 +86,43 @@ export function WellSchematic({ data }: Props) {
     100
   );
 
-  const W = 1040;
+  const W = 1120;
   const headerH = 88;
   // Faixa de meta (Elev. MR/BAP/Fundo) — não cruza a cabeça de produção
   const metaBandH = 52;
   // Espaço da árvore/cabeça acima do MD=0
   const wellheadBandH = 62;
   const topY = headerH + metaBandH + wellheadBandH;
-  const wellCenterX = 430;
+  // Poço um pouco à esquerda → mais ar para legendas à direita
+  const wellCenterX = 400;
   const wellheadY = topY; // base da cabeça no topo do poço (MD 0)
   const wellheadTopY = headerH + metaBandH + 6; // começa abaixo dos pills
 
   // Card metrics (must match InfoCard)
-  const CARD_H = 40;
-  const CARD_GAP = 48; // center-to-center — no overlap
+  const CARD_H = 42;
+  const CARD_GAP = 56; // center-to-center — mais respiro
   const LABEL_TOP = wellheadTopY + 8; // labels da cabeça ao lado da árvore
   const FOOTER_H = 64;
+  const LEFT_CARD_X = 24;
+  const LEFT_CARD_W = 228;
 
   // Well drawing height (fixed). Labels may extend BELOW this; SVG grows.
   const minWellSpan = 900;
   const bottomY = topY + minWellSpan;
   const toY = makeDepthScale(maxDepth, topY, bottomY);
 
-  type RightItem = {
+  type CalloutItem = {
     id: string;
-    kind: 'comp' | 'perf' | 'fundo' | 'sapata' | 'wh' | 'extrem' | 'tampao';
+    side: 'left' | 'right';
+    kind: 'comp' | 'perf' | 'fundo' | 'sapata' | 'wh' | 'extrem' | 'tampao' | 'casing';
     depth: number;
     title: string;
     subtitle?: string;
     tone?: 'default' | 'open' | 'closed' | 'warn' | 'meta' | 'extrem';
     /** Y fixo no desenho (componentes: pilha no fundo, sem escala) */
     fixedY?: number;
+    /** casing only */
+    casingId?: string;
   };
 
   // —— Coluna: pilha VISUAL no fundo (sem escala de profundidade) ——
@@ -178,159 +134,19 @@ export function WellSchematic({ data }: Props) {
   const stackAnchorY = Math.min(
     toY(extremidade),
     toY(num(data.fundoEncontrado, extremidade)),
-    bottomY - 28
+    bottomY - 36
   );
-  // Cabe no máximo ~30% inferior do poço; comprime se houver muitos itens
-  const maxStackSpan = (bottomY - topY) * 0.3;
+  // Mais respiro na pilha da coluna (~35% inferior)
+  const maxStackSpan = (bottomY - topY) * 0.35;
   const COMP_SLOT =
     compsSorted.length <= 1
-      ? 36
-      : Math.min(36, Math.max(22, maxStackSpan / compsSorted.length));
+      ? 44
+      : Math.min(48, Math.max(36, maxStackSpan / compsSorted.length));
   // i=0 (raso) no topo da pilha; i=n-1 (profundo) encostado no fundo
   const compStackYs = compsSorted.map((_, i) => {
     const fromBottom = compsSorted.length - 1 - i;
-    return stackAnchorY - COMP_SLOT * 0.35 - fromBottom * COMP_SLOT;
+    return stackAnchorY - COMP_SLOT * 0.4 - fromBottom * COMP_SLOT;
   });
-
-  const rightItems: RightItem[] = [];
-
-  if (data.wellhead) {
-    rightItems.push({
-      id: 'wh',
-      kind: 'wh',
-      depth: -1,
-      title: data.wellhead,
-      subtitle: data.donut,
-      tone: 'meta',
-    });
-  }
-
-  for (const p of data.perforations) {
-    rightItems.push({
-      id: p.id,
-      kind: 'perf',
-      depth: (num(p.top) + num(p.bottom)) / 2,
-      title: `${fmt(p.top)} – ${fmt(p.bottom)} m`,
-      subtitle:
-        p.status === 'aberto' ? 'Canhoneado aberto' : 'Canhoneado fechado',
-      tone: p.status === 'aberto' ? 'open' : 'closed',
-    });
-  }
-
-  // Componentes da coluna (sem tampão)
-  for (let i = 0; i < compsSorted.length; i++) {
-    const c = compsSorted[i];
-    const to = num(c.depth);
-    rightItems.push({
-      id: c.id,
-      kind: 'comp',
-      depth: to,
-      fixedY: compStackYs[i],
-      title: c.label,
-      subtitle: `${fmt(to)} m`,
-      tone: 'default',
-    });
-  }
-
-  rightItems.push({
-    id: 'extrem',
-    kind: 'extrem',
-    depth: extremidade,
-    title: `EXTREM. ${fmt(extremidade)} m`,
-    subtitle: 'Extremidade da coluna',
-    tone: 'extrem',
-  });
-
-  // Tampão opcional — na escala real do poço, fecha o RV de produção
-  const tampaoOn = Boolean(data.tampao?.enabled);
-  const tampaoTop = num(data.tampao?.depthTop, NaN);
-  const tampaoBot = num(data.tampao?.depthBottom, NaN);
-  if (tampaoOn && Number.isFinite(tampaoBot)) {
-    const mid = Number.isFinite(tampaoTop)
-      ? (tampaoTop + tampaoBot) / 2
-      : tampaoBot;
-    rightItems.push({
-      id: 'tampao',
-      kind: 'tampao',
-      depth: mid,
-      // sem fixedY: posiciona pela profundidade real (embaixo do poço)
-      title: data.tampao?.label || 'Tampão',
-      subtitle: Number.isFinite(tampaoTop)
-        ? `Topo ${fmt(tampaoTop)} → Base ${fmt(tampaoBot)} m`
-        : `Base ${fmt(tampaoBot)} m`,
-      tone: 'default',
-    });
-  }
-
-  rightItems.push({
-    id: 'fundo',
-    kind: 'fundo',
-    depth: num(data.fundoEncontrado),
-    title: `Fundo ${fmt(data.fundoEncontrado)} m`,
-    subtitle: `Última intervenção ${data.fundoData}`,
-    tone: 'warn',
-  });
-
-  rightItems.push({
-    id: 'sapata',
-    kind: 'sapata',
-    depth: num(data.totalDepth),
-    title: `Sapata ${fmt(data.totalDepth)} m`,
-    subtitle: 'Profundidade total / TD',
-    tone: 'meta',
-  });
-
-  // Ordena: wh no topo; depois por Y (fixos dos comps ou toY da profundidade)
-  rightItems.sort((a, b) => {
-    if (a.kind === 'wh') return -1;
-    if (b.kind === 'wh') return 1;
-    const ya = a.fixedY ?? toY(a.depth);
-    const yb = b.fixedY ?? toY(b.depth);
-    return ya - yb;
-  });
-
-  // Empilha labels: comps já têm fixedY; demais usam escala e empurram p/ não colidir
-  const desiredRightYs = rightItems.map((item) =>
-    item.kind === 'wh'
-      ? LABEL_TOP
-      : item.fixedY != null
-        ? item.fixedY
-        : toY(item.depth)
-  );
-  // Só aplica pack nos que NÃO são comp — preserva pilha fixa dos componentes
-  const rightYs = desiredRightYs.slice();
-  for (let i = 0; i < rightItems.length; i++) {
-    if (rightItems[i].kind === 'comp' || rightItems[i].kind === 'wh') continue;
-    // mínimo: abaixo do anterior + gap
-    if (i > 0) {
-      rightYs[i] = Math.max(rightYs[i], rightYs[i - 1] + CARD_GAP);
-    }
-  }
-  // Passada final: garante gap global sem mover comps para fora da pilha
-  for (let i = 1; i < rightItems.length; i++) {
-    if (rightItems[i].kind === 'comp') {
-      // comp mantém fixedY; se colidir com anterior, empurra o ANTERIOR só se não for comp
-      if (rightYs[i] < rightYs[i - 1] + CARD_GAP && rightItems[i - 1].kind !== 'comp') {
-        // move o atual levemente (ainda na zona) — na prática comps já estão espaçados
-        rightYs[i] = rightYs[i - 1] + CARD_GAP;
-      }
-      continue;
-    }
-    rightYs[i] = Math.max(rightYs[i], rightYs[i - 1] + CARD_GAP);
-  }
-
-  const lastLabelBottom =
-    rightYs.length > 0
-      ? Math.max(...rightYs) + CARD_H / 2 + 8
-      : bottomY;
-
-  // Altura do SVG: poço + labels (sem esticar por escala dos comps)
-  const H = Math.max(bottomY, lastLabelBottom) + FOOTER_H + 20;
-
-  // Mapa id → Y visual do glifo (pilha no fundo)
-  const compYById = new Map(
-    compsSorted.map((c, i) => [c.id, compStackYs[i]] as const)
-  );
 
   const sortedCasings = [...data.casings].sort(
     (a, b) => parseDiameterInches(b.diameter) - parseDiameterInches(a.diameter)
@@ -355,20 +171,163 @@ export function WellSchematic({ data }: Props) {
   const formationRight = wellCenterX + outerW / 2 + 42;
   const formationW = formationRight - formationLeft;
 
-  // Left casing labels (few items — fit inside well span)
-  const leftItems = sortedCasings.map((c) => ({
-    casing: c,
-    yDesired:
+  // —— DIREITA: coluna + cabeça + extremidade + tampão ——
+  const rightItems: CalloutItem[] = [];
+
+  if (data.wellhead) {
+    rightItems.push({
+      id: 'wh',
+      side: 'right',
+      kind: 'wh',
+      depth: -1,
+      title: data.wellhead,
+      subtitle: data.donut,
+      tone: 'meta',
+    });
+  }
+
+  for (let i = 0; i < compsSorted.length; i++) {
+    const c = compsSorted[i];
+    const to = num(c.depth);
+    rightItems.push({
+      id: c.id,
+      side: 'right',
+      kind: 'comp',
+      depth: to,
+      fixedY: compStackYs[i],
+      title: c.label,
+      subtitle: `${fmt(to)} m`,
+      tone: 'default',
+    });
+  }
+
+  rightItems.push({
+    id: 'extrem',
+    side: 'right',
+    kind: 'extrem',
+    depth: extremidade,
+    title: `EXTREM. ${fmt(extremidade)} m`,
+    subtitle: 'Extremidade da coluna',
+    tone: 'extrem',
+  });
+
+  const tampaoOn = Boolean(data.tampao?.enabled);
+  const tampaoTop = num(data.tampao?.depthTop, NaN);
+  const tampaoBot = num(data.tampao?.depthBottom, NaN);
+  if (tampaoOn && Number.isFinite(tampaoBot)) {
+    const mid = Number.isFinite(tampaoTop)
+      ? (tampaoTop + tampaoBot) / 2
+      : tampaoBot;
+    rightItems.push({
+      id: 'tampao',
+      side: 'right',
+      kind: 'tampao',
+      depth: mid,
+      title: data.tampao?.label || 'Tampão',
+      subtitle: Number.isFinite(tampaoTop)
+        ? `Topo ${fmt(tampaoTop)} → Base ${fmt(tampaoBot)} m`
+        : `Base ${fmt(tampaoBot)} m`,
+      tone: 'default',
+    });
+  }
+
+  // —— ESQUERDA: revestimentos + canhoneado + fundo + sapata ——
+  const leftItems: CalloutItem[] = sortedCasings.map((c) => ({
+    id: `casing-${c.id}`,
+    side: 'left' as const,
+    kind: 'casing' as const,
+    casingId: c.id,
+    depth: num(c.depthBottom),
+    title: casingPrimary(c),
+    subtitle: casingSecondary(c),
+    tone: 'default' as const,
+    fixedY:
       num(c.depthBottom) < maxDepth * 0.18
         ? toY(num(c.depthBottom)) - 6
         : (toY(num(c.depthTop)) + toY(num(c.depthBottom))) / 2,
   }));
-  leftItems.sort((a, b) => a.yDesired - b.yDesired);
-  const leftYs = deconflict(
-    leftItems.map((i) => i.yDesired),
-    52,
-    topY + 12,
-    bottomY - 24
+
+  for (const p of data.perforations) {
+    leftItems.push({
+      id: p.id,
+      side: 'left',
+      kind: 'perf',
+      depth: (num(p.top) + num(p.bottom)) / 2,
+      title: `${fmt(p.top)} – ${fmt(p.bottom)} m`,
+      subtitle:
+        p.status === 'aberto' ? 'Canhoneado aberto' : 'Canhoneado fechado',
+      tone: p.status === 'aberto' ? 'open' : 'closed',
+    });
+  }
+
+  leftItems.push({
+    id: 'fundo',
+    side: 'left',
+    kind: 'fundo',
+    depth: num(data.fundoEncontrado),
+    title: `Fundo ${fmt(data.fundoEncontrado)} m`,
+    subtitle: `Última intervenção ${data.fundoData}`,
+    tone: 'warn',
+  });
+
+  leftItems.push({
+    id: 'sapata',
+    side: 'left',
+    kind: 'sapata',
+    depth: num(data.totalDepth),
+    title: `Sapata ${fmt(data.totalDepth)} m`,
+    subtitle: 'Profundidade total / TD',
+    tone: 'meta',
+  });
+
+  function packSide(items: CalloutItem[]): number[] {
+    const sorted = [...items].sort((a, b) => {
+      if (a.kind === 'wh') return -1;
+      if (b.kind === 'wh') return 1;
+      const ya = a.fixedY ?? toY(a.depth);
+      const yb = b.fixedY ?? toY(b.depth);
+      return ya - yb;
+    });
+    // mutate order for rendering consistency
+    items.length = 0;
+    items.push(...sorted);
+
+    const desired = sorted.map((item) =>
+      item.kind === 'wh'
+        ? LABEL_TOP
+        : item.fixedY != null
+          ? item.fixedY
+          : toY(item.depth)
+    );
+    const ys = desired.slice();
+    for (let i = 1; i < ys.length; i++) {
+      const keepFixed =
+        sorted[i].kind === 'comp' || sorted[i].kind === 'casing';
+      if (keepFixed && sorted[i].fixedY != null) {
+        // tenta manter fixedY; se colidir, desce o mínimo
+        ys[i] = Math.max(sorted[i].fixedY!, ys[i - 1] + CARD_GAP);
+      } else {
+        ys[i] = Math.max(ys[i], ys[i - 1] + CARD_GAP);
+      }
+    }
+    return ys;
+  }
+
+  const rightYs = packSide(rightItems);
+  const leftYs = packSide(leftItems);
+
+  const lastLabelBottom = Math.max(
+    bottomY,
+    ...(rightYs.length ? rightYs : [bottomY]),
+    ...(leftYs.length ? leftYs : [bottomY])
+  ) + CARD_H / 2 + 12;
+
+  // Altura do SVG: poço + labels
+  const H = Math.max(bottomY, lastLabelBottom) + FOOTER_H + 24;
+
+  // Mapa id → Y visual do glifo (pilha no fundo)
+  const compYById = new Map(
+    compsSorted.map((c, i) => [c.id, compStackYs[i]] as const)
   );
 
   const scaleSteps = niceTicks(maxDepth, 8);
@@ -376,7 +335,9 @@ export function WellSchematic({ data }: Props) {
   // Coluna termina na extremidade
   const tubingBottomDepth = extremidade;
 
-  const legendY = Math.max(bottomY + 28, lastLabelBottom + 20);
+  const legendY = Math.max(bottomY + 28, lastLabelBottom + 16);
+  const RIGHT_CARD_X = wellCenterX + outerW / 2 + 56;
+  const RIGHT_CARD_W = 300;
 
   return (
     <div className="schematic-wrap">
@@ -849,45 +810,73 @@ export function WellSchematic({ data }: Props) {
           );
         })()}
 
-        {/* Left labels (casings) */}
+        {/* Left labels: revestimentos + canhoneado + fundo + sapata */}
         {leftItems.map((item, i) => {
-          const c = item.casing;
           const y = leftYs[i];
-          const w = diameterWidth(c.diameter, 124);
-          const attachY = toY(num(c.depthBottom));
-          const attachX = wellCenterX - w / 2;
-          const cardX = 28;
-          const cardW = 210;
+          const cardX = LEFT_CARD_X;
+          const cardW = LEFT_CARD_W;
+          let attachX = wellCenterX - prodW / 2 - 2;
+          let attachY = toY(item.depth);
+
+          if (item.kind === 'casing' && item.casingId) {
+            const c = sortedCasings.find((x) => x.id === item.casingId);
+            if (c) {
+              const w = diameterWidth(
+                c.diameter,
+                124 - sortedCasings.indexOf(c) * 14
+              );
+              attachX = wellCenterX - w / 2;
+              attachY = toY(num(c.depthBottom));
+            }
+          } else if (item.kind === 'perf') {
+            attachX = wellCenterX - prodW / 2 - 12;
+            attachY = toY(item.depth);
+          } else if (item.kind === 'fundo' || item.kind === 'sapata') {
+            attachX = wellCenterX - prodW / 2 - 2;
+            attachY = toY(item.depth);
+          }
+
+          const accent =
+            item.tone === 'open'
+              ? C.open
+              : item.tone === 'closed'
+                ? C.closed
+                : item.tone === 'warn'
+                  ? '#ea580c'
+                  : item.tone === 'meta'
+                    ? '#0369a1'
+                    : '#0f766e';
+
           return (
-            <g key={`left-${c.id}`}>
+            <g key={`left-${item.id}`}>
               <path
-                d={`M ${cardX + cardW} ${y} H ${attachX - 18} L ${attachX - 2} ${attachY}`}
+                d={`M ${cardX + cardW} ${y} H ${attachX - 14} L ${attachX} ${attachY}`}
                 fill="none"
                 stroke={C.callout}
-                strokeWidth={1.2}
+                strokeWidth={1.15}
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
-              <circle cx={attachX - 2} cy={attachY} r={2.5} fill={C.steelDark} />
+              <circle cx={attachX} cy={attachY} r={2.5} fill={accent} />
               <InfoCard
                 x={cardX}
                 y={y - CARD_H / 2}
                 width={cardW}
                 height={CARD_H}
-                title={casingPrimary(c)}
-                subtitle={casingSecondary(c)}
-                accent="#0f766e"
+                title={item.title}
+                subtitle={item.subtitle}
+                accent={accent}
+                tone={item.tone}
               />
             </g>
           );
         })}
 
-        {/* Right labels */}
+        {/* Right labels: coluna + cabeça + extremidade + tampão */}
         {rightItems.map((item, i) => {
           const y = rightYs[i];
-          const cardX = wellCenterX + outerW / 2 + 52;
-          const cardW = 300;
-          // Componentes: attach no próprio glifo (mesma Y da tag)
+          const cardX = RIGHT_CARD_X;
+          const cardW = RIGHT_CARD_W;
           let attachX = wellCenterX + tubingW / 2 + 2;
           let attachY =
             item.kind === 'wh'
@@ -896,13 +885,7 @@ export function WellSchematic({ data }: Props) {
                 ? y
                 : toY(item.depth);
 
-          if (item.kind === 'perf') {
-            attachX = wellCenterX + prodW / 2 + 12;
-          } else if (
-            item.kind === 'fundo' ||
-            item.kind === 'sapata' ||
-            item.kind === 'extrem'
-          ) {
+          if (item.kind === 'extrem') {
             attachX = wellCenterX + prodW / 2 + 2;
           } else if (item.kind === 'tampao') {
             attachX = wellCenterX + prodBoreHalf;
@@ -910,7 +893,6 @@ export function WellSchematic({ data }: Props) {
           } else if (item.kind === 'wh') {
             attachX = wellCenterX + outerW * 0.4;
           } else if (item.kind === 'comp') {
-            // Tag do tubo aponta para a coluna central (não para um “niple”)
             attachX = wellCenterX + tubingW / 2 + 2;
           }
 
@@ -933,7 +915,7 @@ export function WellSchematic({ data }: Props) {
                 d={
                   item.kind === 'comp'
                     ? `M ${attachX} ${attachY} H ${cardX - 8}`
-                    : `M ${attachX} ${attachY} H ${attachX + 16} L ${cardX - 8} ${y}`
+                    : `M ${attachX} ${attachY} H ${attachX + 18} L ${cardX - 8} ${y}`
                 }
                 fill="none"
                 stroke={C.callout}
