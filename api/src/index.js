@@ -26,14 +26,23 @@ const app = express();
 
 const allowedOrigins = CORS_ORIGIN.split(',').map((s) => s.trim()).filter(Boolean);
 
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return true;
+  // Previews e produção na Vercel (*.vercel.app)
+  try {
+    const host = new URL(origin).hostname;
+    if (host.endsWith('.vercel.app') || host === 'vercel.app') return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
 app.use(
   cors({
     origin(origin, cb) {
-      // permite tools sem Origin (curl/health)
-      if (!origin) return cb(null, true);
-      if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
-        return cb(null, true);
-      }
+      if (isAllowedOrigin(origin)) return cb(null, true);
       return cb(new Error('CORS bloqueado: ' + origin));
     },
     credentials: true,
