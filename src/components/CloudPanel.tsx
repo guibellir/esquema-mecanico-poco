@@ -14,16 +14,24 @@ import {
   type CloudProjectSummary,
   type CloudUser,
 } from '../utils/cloudApi';
+import { resolveSaveName } from '../utils/projectName';
+
+type LoadMeta = { id: string; name: string };
 
 type Props = {
   open: boolean;
   onClose: () => void;
   data: WellData;
-  onLoadProject: (data: WellData) => void;
+  onLoadProject: (data: WellData, meta?: LoadMeta) => void;
   onMessage: (msg: string) => void;
   /** Projeto atualmente em edição na nuvem (controlado pelo App) */
   currentId: string | null;
   onCurrentIdChange: (id: string | null) => void;
+  /** Opcional: resolve nome de salvamento (App pode sobrescrever) */
+  onResolveSaveName?: (
+    wellName: string,
+    assigned: string | null
+  ) => string;
 };
 
 export function CloudPanel({
@@ -34,6 +42,7 @@ export function CloudPanel({
   onMessage,
   currentId,
   onCurrentIdChange,
+  onResolveSaveName,
 }: Props) {
   const configured = isCloudConfigured();
   const [user, setUser] = useState<CloudUser | null>(null);
@@ -44,6 +53,11 @@ export function CloudPanel({
   const [projects, setProjects] = useState<CloudProjectSummary[]>([]);
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [query, setQuery] = useState('');
+  /** Erro/sucesso visível DENTRO do painel (toast fica atrás do overlay) */
+  const [authFeedback, setAuthFeedback] = useState<{
+    type: 'error' | 'ok';
+    text: string;
+  } | null>(null);
 
   const refresh = async () => {
     if (!configured) {
@@ -58,13 +72,28 @@ export function CloudPanel({
         setProjects(await listProjects());
       } else {
         setProjects([]);
-        onCurrentIdChange(null);
+        // Não zera currentId só por abrir a biblioteca sem login —
+        // o App controla o vínculo do autosave.
       }
     } catch (e) {
       onMessage(e instanceof Error ? e.message : 'Erro na nuvem');
     } finally {
       setLoading(false);
     }
+  };
+
+  const pickSaveName = async (): Promise<string> => {
+    if (data.wellName?.trim()) return data.wellName.trim();
+    let existing: string[] = projects.map((p) => p.name);
+    try {
+      existing = (await listProjects()).map((p) => p.name);
+    } catch {
+      // mantém lista em memória
+    }
+    if (onResolveSaveName) {
+      return onResolveSaveName(data.wellName, null);
+    }
+    return resolveSaveName(data.wellName, null, existing);
   };
 
   useEffect(() => {
@@ -88,21 +117,44 @@ export function CloudPanel({
   }, [projects, query]);
 
   const handleAuth = async () => {
+    const mail = email.trim();
+    const pass = password;
+    if (!mail) {
+      setAuthFeedback({ type: 'error', text: 'Informe o email.' });
+      return;
+    }
+    if (!mail.includes('@')) {
+      setAuthFeedback({ type: 'error', text: 'Email inválido.' });
+      return;
+    }
+    if (pass.length < 6) {
+      setAuthFeedback({
+        type: 'error',
+        text: 'A senha deve ter ao menos 6 caracteres.',
+      });
+      return;
+    }
+
     setBusy(true);
+    setAuthFeedback(null);
     try {
       if (mode === 'login') {
-        const r = await login(email.trim(), password);
+        const r = await login(mail, pass);
         setUser(r.user);
+        setAuthFeedback({ type: 'ok', text: `Logado: ${r.user.email}` });
         onMessage(`Logado: ${r.user.email}`);
       } else {
-        const r = await register(email.trim(), password);
+        const r = await register(mail, pass);
         setUser(r.user);
+        setAuthFeedback({ type: 'ok', text: `Conta criada: ${r.user.email}` });
         onMessage(`Conta criada: ${r.user.email}`);
       }
       setPassword('');
       setProjects(await listProjects());
     } catch (e) {
-      onMessage(e instanceof Error ? e.message : 'Falha no login');
+      const text = e instanceof Error ? e.message : 'Falha no login';
+      setAuthFeedback({ type: 'error', text });
+      onMessage(text);
     } finally {
       setBusy(false);
     }
@@ -115,14 +167,14 @@ export function CloudPanel({
     }
     setBusy(true);
     try {
-      const name = data.wellName?.trim() || 'Projeto sem nome';
+      const name = await pickSaveName();
       if (currentId) {
         await updateProject(currentId, name, data);
-        onMessage('Projeto atualizado na nuvem');
+        onMessage(`Projeto atualizado na nuvem: ${name}`);
       } else {
         const p = await createProject(name, data);
         onCurrentIdChange(p.id);
-        onMessage('Projeto salvo na nuvem');
+        onMessage(`Projeto salvo na nuvem: ${name}`);
       }
       setProjects(await listProjects());
     } catch (e) {
@@ -136,11 +188,14 @@ export function CloudPanel({
     if (!user) return;
     setBusy(true);
     try {
-      const name = `${data.wellName?.trim() || 'Projeto'} (cópia)`;
+      const base =
+        data.wellName?.trim() ||
+        (await pickSaveName()).replace(/\s*\(cópia\)\s*$/i, '');
+      const name = `${base} (cópia)`;
       const p = await createProject(name, data);
       onCurrentIdChange(p.id);
       setProjects(await listProjects());
-      onMessage('Cópia salva na nuvem');
+      onMessage(`Cópia salva na nuvem: ${name}`);
     } catch (e) {
       onMessage(e instanceof Error ? e.message : 'Erro ao salvar');
     } finally {
@@ -152,7 +207,7 @@ export function CloudPanel({
     setBusy(true);
     try {
       const p = await getProject(id);
-      onLoadProject(p.data);
+      onLoadProject(p.data, { id: p.id, name: p.name });
       onCurrentIdChange(p.id);
       onMessage(`Aberto: ${p.name}`);
       onClose();
@@ -217,11 +272,11 @@ export function CloudPanel({
           <div className="library-auth">
             <form
               className="library-auth-card"
+              noValidate
               onSubmit={(e) => {
                 e.preventDefault();
-                if (!busy && email && password.length >= 6) {
-                  void handleAuth();
-                }
+                e.stopPropagation();
+                if (!busy) void handleAuth();
               }}
             >
               <h3>Acesse sua conta</h3>
@@ -230,14 +285,20 @@ export function CloudPanel({
                 <button
                   type="button"
                   className={mode === 'login' ? 'active' : ''}
-                  onClick={() => setMode('login')}
+                  onClick={() => {
+                    setMode('login');
+                    setAuthFeedback(null);
+                  }}
                 >
                   Entrar
                 </button>
                 <button
                   type="button"
                   className={mode === 'register' ? 'active' : ''}
-                  onClick={() => setMode('register')}
+                  onClick={() => {
+                    setMode('register');
+                    setAuthFeedback(null);
+                  }}
                 >
                   Criar conta
                 </button>
@@ -246,26 +307,50 @@ export function CloudPanel({
                 Email
                 <input
                   type="email"
+                  name="email"
                   autoComplete="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setAuthFeedback(null);
+                  }}
+                  disabled={busy}
                 />
               </label>
               <label>
                 Senha
                 <input
                   type="password"
+                  name="password"
                   autoComplete={
                     mode === 'login' ? 'current-password' : 'new-password'
                   }
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setAuthFeedback(null);
+                  }}
+                  disabled={busy}
+                  minLength={6}
                 />
               </label>
+              <p className="library-auth-hint">Mínimo de 6 caracteres na senha</p>
+              {authFeedback && (
+                <div
+                  className={
+                    authFeedback.type === 'error'
+                      ? 'library-auth-feedback is-error'
+                      : 'library-auth-feedback is-ok'
+                  }
+                  role="alert"
+                >
+                  {authFeedback.text}
+                </div>
+              )}
               <button
                 type="submit"
                 className="library-primary"
-                disabled={busy || !email || password.length < 6}
+                disabled={busy}
               >
                 {busy
                   ? 'Aguarde…'

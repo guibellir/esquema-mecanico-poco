@@ -93,9 +93,169 @@
   background: #0f8f5c !important;
 }
 
+.btn-new-well {
+  background: #1a3a52 !important;
+  border-color: #2f6f9a !important;
+  color: #cfe8ff !important;
+}
+
+.btn-new-well:hover {
+  background: #214a68 !important;
+  border-color: #3d8ec2 !important;
+}
+
+.cloud-save-status {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #8b9aab;
+  padding: 0.35rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid #2a3645;
+  background: #151d27;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cloud-save-status.status-saving,
+.cloud-save-status.status-pending {
+  color: #f0d58a;
+  border-color: #5a4a28;
+  background: #2a2414;
+}
+
+.cloud-save-status.status-saved {
+  color: #9fe3c0;
+  border-color: #1f5a40;
+  background: #12261c;
+}
+
+.cloud-save-status.status-error,
+.cloud-save-status.status-need-login {
+  color: #f0a0a8;
+  border-color: #5a3038;
+  background: #2a181c;
+}
+
 .btn-file {
   display: inline-flex;
   align-items: center;
+}
+
+/* ——— Tela inicial (abre limpo) ——— */
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(2, 6, 12, 0.82);
+  backdrop-filter: blur(6px);
+}
+
+.welcome-card {
+  width: min(440px, 100%);
+  background: linear-gradient(180deg, #15202c 0%, #0e151d 100%);
+  border: 1px solid #2a3645;
+  border-radius: 18px;
+  padding: 1.6rem 1.4rem 1.35rem;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+
+.welcome-mark {
+  font-size: 2rem;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+
+.welcome-kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6f879c;
+}
+
+.welcome-card h2 {
+  margin: 0.35rem 0 0.45rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #f5f8fb;
+}
+
+.welcome-sub {
+  margin: 0 0 1.2rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: #8b9aab;
+}
+
+.welcome-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.welcome-btn {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #3a4a5c;
+  background: #1a2532;
+  color: #e7ecf1;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.12s;
+}
+
+.welcome-btn:hover:not(:disabled) {
+  background: #243243;
+  border-color: #4d6278;
+  transform: translateY(-1px);
+}
+
+.welcome-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.welcome-btn-primary {
+  background: #0d7a4f;
+  border-color: #109463;
+}
+
+.welcome-btn-primary:hover:not(:disabled) {
+  background: #0f8f5c;
+  border-color: #14a86c;
+}
+
+.welcome-btn-ghost {
+  background: transparent;
+}
+
+.welcome-btn-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.welcome-btn-desc {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #9aabbb;
+}
+
+.welcome-btn-primary .welcome-btn-desc {
+  color: #c6f0d9;
 }
 
 .app-main {
@@ -183,7 +343,8 @@
   position: fixed;
   top: 72px;
   right: 16px;
-  z-index: 50;
+  /* Acima da biblioteca (80) e da tela de boas-vindas (90) */
+  z-index: 120;
   background: #0d7a4f;
   color: #fff;
   font-size: 0.85rem;
@@ -590,6 +751,36 @@
   color: #eef3f8;
   padding: 0.65rem 0.75rem;
   font-size: 0.95rem;
+}
+
+.library-auth-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #6f879c;
+  text-align: left;
+}
+
+.library-auth-feedback {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+  line-height: 1.35;
+}
+
+.library-auth-feedback.is-error {
+  background: #3a2228;
+  color: #f0a0a8;
+  border: 1px solid #5a3038;
+}
+
+.library-auth-feedback.is-ok {
+  background: #12261c;
+  color: #9fe3c0;
+  border: 1px solid #1f5a40;
 }
 
 .cloud-auth-tabs {

@@ -13,7 +13,15 @@ export type CloudProject = CloudProjectSummary & {
   data: WellData;
 };
 
+/**
+ * Em desenvolvimento o browser SEMPRE fala com o proxy do Vite (/cloud-api),
+ * que repassa para o EasyPanel — assim não há CORS com localhost.
+ * Em produção usa VITE_API_URL (URL absoluta da API).
+ */
 function apiBase(): string {
+  if (import.meta.env.DEV) {
+    return '/cloud-api';
+  }
   const base = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
   if (!base) {
     throw new Error(
@@ -33,6 +41,7 @@ export function setToken(token: string | null): void {
 }
 
 export function isCloudConfigured(): boolean {
+  if (import.meta.env.DEV) return true;
   return Boolean((import.meta.env.VITE_API_URL as string | undefined)?.trim());
 }
 
@@ -51,10 +60,17 @@ async function request<T>(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${apiBase()}${path}`, {
-    ...options,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${apiBase()}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw new Error(
+      'Não foi possível conectar à API. Verifique se o servidor local (proxy) está no ar.'
+    );
+  }
 
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {

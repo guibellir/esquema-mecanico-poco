@@ -33,6 +33,8 @@ function isAllowedOrigin(origin) {
   try {
     const host = new URL(origin).hostname;
     if (host.endsWith('.vercel.app') || host === 'vercel.app') return true;
+    // Dev local (Vite, etc.)
+    if (host === 'localhost' || host === '127.0.0.1') return true;
   } catch {
     /* ignore */
   }
